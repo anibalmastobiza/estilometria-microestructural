@@ -1,0 +1,4 @@
+dataset,url,access,license,scope,role,limitation
+ELTeC-spa,https://github.com/COST-ELTeC/ELTeC-spa,GitHub XML-TEI sin cuenta,textos dominio público; marcado CC BY 4.0,novelas españolas; README v0.9.1 declara 84,base histórica comparable,el repositorio paraguas declara 83 en esa versión; fijar commit y contar archivos
+conha19,https://github.com/cligs/conha19,GitHub TXT y TEI sin cuenta,Public Domain Mark para textos y marcado,234 novelas públicas de 256; Argentina Cuba México 1830–1910,replicación geográfica,solo metadata_free.csv corresponde al subconjunto público
+CoNSSA,https://github.com/cligs/conssa,GitHub TXT y TEI sin cuenta,textos dominio público; marcado y metadatos CC BY 4.0,217 textos públicos de 358; España 1880–1939,replicación temporal y géneros,el corpus completo no es descargable sin restricciones

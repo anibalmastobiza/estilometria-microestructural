@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';import fs from 'node:fs';import vm from 'node:vm';
+import {schedule,mulberry32} from '../docs/stimuli.js';
+const src=fs.readFileSync(new URL('../backend/Code.gs',import.meta.url),'utf8');
+const ctx=vm.createContext({});vm.runInContext(src,ctx);
+function packet(){return {mode:'live',consent_accepted:true,session_id:'00000000-0000-4000-8000-000000000000',protocol_version:'EME-INT-1.0.0',consent_version:'EME-CI-1.0.0',camera_consent:false,list_id:0,bank_id:0,elapsed_ms:150000,consent_elapsed_ms:20000,task_start_ms:35000,age_band:'30-44',spanish_level:'native',education:'',reading_frequency:'',gender:'',gaze_status:'declined',validation:[],viewport:{width:1200,height:800,dpr:1},quality:{hidden:0,resize:0},trials:schedule(0,0,mulberry32(1)).map((x,order)=>({item_id:x.item.id,order,segmented:Number(x.segmented),interrupted:Number(x.interrupted),response:x.item.answer,correct:0,timed_out:false,reading_active_ms:12000,reading_wall_ms:x.interrupted?16000:12000,interruption_actual_ms:x.interrupted?4000:0,question_rt_ms:2000,interrupt_rt_ms:x.interrupted?1000:null,interrupt_correct:x.interrupted?true:null,gaze_return_ms:null,gaze_n:0,gaze_inside:0,gaze_post_n:0,gaze_post_inside:0,aoi:{x:300,y:200,w:600,h:300}}))};}
+test('Acepta sesión íntegra y recalcula aciertos en servidor',()=>{const row=ctx.validate_(packet());assert.equal(row.length,17);assert.ok(JSON.parse(row[16]).every(t=>t.correct===1));});
+test('Rechaza demo, falta de consentimiento, inyección y falsos datos de cámara',()=>{for(const mutate of [p=>p.mode='demo',p=>p.consent_accepted=false,p=>p.age_band='=IMPORTXML("bad")',p=>p.trials[0].gaze_n=1,p=>p.trials[0].segmented=1-p.trials[0].segmented,p=>p.trials.pop(),p=>p.gaze_status='valid']){const p=packet();mutate(p);assert.throws(()=>ctx.validate_(p));}});
+test('No guarda campos inesperados ni coordenadas crudas',()=>{const p=packet();p.secret='unexpected';p.raw_gaze=[{x:1}];const text=JSON.stringify(ctx.validate_(p));assert.ok(!text.includes('unexpected'));assert.ok(!text.includes('raw_gaze'));});
+test('Omisión queda null y no se convierte en un acierto/error observado',()=>{const p=packet();p.trials[0].response=null;assert.equal(JSON.parse(ctx.validate_(p)[16])[0].correct,null);});
+test('Reintento idempotente: una sola fila por sesión',()=>{
+ const rows=[vm.runInContext('HEADERS',ctx)],props=new Map([['COLLECTION_OPEN','true'],['SHEET_ID','test']]);
+ const sheet={getLastRow:()=>rows.length,getRange:(r,c,n,w)=>({getValues:()=>rows.slice(r-1,r-1+n).map(row=>row.slice(c-1,c-1+w)),setValues:v=>{rows[r-1]=v[0];},createTextFinder:id=>({matchEntireCell:()=>({findNext:()=>rows.slice(1).some(row=>row[1]===id)})})})};
+ ctx.PropertiesService={getScriptProperties:()=>({getProperty:k=>props.get(k),setProperty:(k,v)=>props.set(k,v)})};ctx.LockService={getScriptLock:()=>({waitLock(){},releaseLock(){}})};ctx.SpreadsheetApp={openById:()=>({getSheetByName:()=>sheet}),flush(){}};
+ assert.equal(ctx.saveSession(packet()).ok,true);assert.equal(ctx.saveSession(packet()).duplicate,true);assert.equal(rows.length,2);
+});

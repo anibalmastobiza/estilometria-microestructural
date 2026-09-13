@@ -1,0 +1,15 @@
+<!doctype html><html><head><base target="_top"><meta charset="utf-8"></head><body>
+<script>
+const ALLOWED_ORIGIN = <?!= JSON.stringify(origin).replace(/</g,'\\u003c') ?>;
+window.addEventListener('message',e=>{
+ if(e.origin!==ALLOWED_ORIGIN||e.source!==window.parent||e.data?.type!=='eme-save')return;
+ const requestId=e.data.requestId;
+ if(typeof requestId!=='string'||requestId.length>80)return;
+ google.script.run.withSuccessHandler(result=>{
+  window.parent.postMessage({type:'eme-saved',requestId,ok:result.ok},ALLOWED_ORIGIN);
+ }).withFailureHandler(()=>{
+  window.parent.postMessage({type:'eme-saved',requestId,ok:false,error:'No se ha podido guardar. Comprueba la configuración del receptor.'},ALLOWED_ORIGIN);
+ }).saveSession(e.data.payload);
+});
+if(/^https:\/\//.test(ALLOWED_ORIGIN))window.parent.postMessage({type:'eme-ready'},ALLOWED_ORIGIN);
+</script></body></html>

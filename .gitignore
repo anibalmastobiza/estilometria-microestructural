@@ -1,0 +1,6 @@
+node_modules/
+data/
+*.csv
+!research/datasets.csv
+*.xlsx
+__pycache__/
