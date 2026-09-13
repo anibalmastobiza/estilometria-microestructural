@@ -144,7 +144,7 @@ async function deliver(payload){
   const requestId=crypto.randomUUID();let ready=false;
   const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',handler);};
   const handler=e=>{
-   if(e.data?.channel!==bridgeChannel||!/^https:\/\/([a-z0-9-]+\.)?script\.googleusercontent\.com$/.test(e.origin))return;
+   if(e.data?.channel!==bridgeChannel||!/^https:\/\/([a-z0-9-]+[.-])?script\.googleusercontent\.com$/.test(e.origin))return;
    if(bridgeWindow&&e.source!==bridgeWindow)return;
    if(e.data?.type==='eme-ready'){bridgeOrigin=e.origin;bridgeWindow=e.source;ready=true;bridgeWindow.postMessage({type:'eme-save',channel:bridgeChannel,requestId,payload},bridgeOrigin);}
    if(e.data?.type==='eme-saved'&&e.data.requestId===requestId){cleanup();e.data.ok?resolve(e.data):reject(new Error(e.data.error||'No se confirmó el envío'));}
