@@ -34,9 +34,9 @@ function landing(){
  <details open><summary><strong>Información y consentimiento</strong></summary>
  <p>Investigador: ${esc(C.researcher)}, ${esc(C.institution)}. Contacto: <a href="mailto:${esc(C.email)}">${esc(C.email)}</a>.</p>
  <p>Participar es voluntario y sin remuneración. Puedes omitir los datos opcionales y salir sin penalización. Las tareas pueden causar cansancio leve.</p>
- <p>Recogemos respuestas, tiempos, datos demográficos y medidas técnicas de la sesión con un código aleatorio. La cámara es opcional: estima la mirada en tu ordenador, sin grabar ni enviar imágenes, vídeo o audio. Solo se envían medidas resumidas.</p>
+ <p>No pedimos tu nombre ni correo. Guardamos respuestas, tiempos, datos demográficos y medidas técnicas con un código aleatorio de sesión. La cámara es opcional: estima la mirada en tu ordenador, sin grabar ni enviar imágenes, vídeo o audio. Solo se envían medidas resumidas.</p>
  <p>En el estudio activo, confirmarás el envío a una hoja privada de Google Sheets. Conservaremos los datos ${C.retentionMonths} meses y publicaremos resultados agregados. GitHub, Google y los proveedores de bibliotecas reciben datos técnicos de conexión.</p>
- <p>Puedes salir y borrar antes del envío. Después, solicita la retirada o ejerce tus derechos escribiéndome e indicando tu código. Puedes reclamar ante la AEPD. Consentimiento ${esc(C.consent)}.</p></details>
+ <p>Puedes retirarte del estudio en cualquier momento. Si sales antes del envío, se descartan tus respuestas. Puedes contactar conmigo para conocer los resultados del estudio. Consentimiento ${esc(C.consent)}.</p></details>
  <form id="consent"><label><input type="checkbox" required name="adult">Tengo 18 años o más y puedo leer español con fluidez.</label><label><input type="checkbox" required name="agree">He leído la información y acepto participar y el tratamiento descrito.</label><label><input type="checkbox" name="webcam">Acepto, de forma opcional, usar mi cámara para estimar la mirada.</label><div class="buttons"><button type="submit">Continuar</button><button type="button" class="secondary" id="decline">No participar</button></div></form>`);
  document.querySelector('#decline').onclick=()=>exit();
  document.querySelector('#consent').onsubmit=e=>{e.preventDefault();session.consent_accepted=true;session.camera_consent=new FormData(e.target).has('webcam');session.consent_elapsed_ms=elapsed();exitButton.hidden=false;demographics();};
@@ -82,6 +82,10 @@ function calibrate(){
  b.onclick=()=>{const r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');if(++count===2){count=0;if(++i===points.length){clearTimeout(timeout);b.remove();validate();}else place();}};
 }
 function validate(){
+ view('<h1>Calibración completada</h1><p>Ahora verás cinco puntos que cambian de posición solos. Mira cada punto sin hacer clic.</p><button id="validate">Comenzar comprobación</button>');
+ document.querySelector('#validate').onclick=validateGaze;
+}
+function validateGaze(){
  view('<h1>Comprobación de la mirada</h1><p>Mira los puntos sin pulsar. Esta fase mide la precisión; no entrena el sistema.</p>');
  const points=[[25,30],[75,30],[50,50],[25,70],[75,70]];let i=0;
  const b=document.createElement('span');b.className='dot';document.body.append(b);
