@@ -138,20 +138,21 @@ function finish(){
  view(`<h1>Has terminado las lecturas</h1><p>Estudiamos si la puntuación que divide un texto en unidades más cortas ayuda a leer cuando aparecen interrupciones.</p><p>Tu código: <strong>${session.session_id}</strong>. Consérvalo si deseas solicitar la retirada de los datos durante los próximos ${C.retentionMonths} meses.</p><p>${C.mode==='demo'?'Esta demostración no enviará datos.':'Puedes confirmar el envío de tus respuestas o descartarlas.'}</p><div class="buttons"><button id="send">${C.mode==='demo'?'Finalizar demostración':'Enviar mis respuestas'}</button><button class="secondary" id="discard">Descartar</button></div><p id="delivery" role="status"></p>`);
  document.querySelector('#discard').onclick=()=>exit();document.querySelector('#send').onclick=send;
 }
-let bridge=null,bridgeOrigin=null;
+let bridge=null,bridgeOrigin=null,bridgeWindow=null;const bridgeChannel=crypto.randomUUID();
 async function deliver(payload){
  return new Promise((resolve,reject)=>{
   const requestId=crypto.randomUUID();let ready=false;
   const cleanup=()=>{clearTimeout(timer);window.removeEventListener('message',handler);};
   const handler=e=>{
-   if(e.source!==bridge?.contentWindow||!/^https:\/\/([a-z0-9-]+\.)?script\.googleusercontent\.com$/.test(e.origin))return;
-   if(e.data?.type==='eme-ready'){bridgeOrigin=e.origin;ready=true;bridge.contentWindow.postMessage({type:'eme-save',requestId,payload},bridgeOrigin);}
+   if(e.data?.channel!==bridgeChannel||!/^https:\/\/([a-z0-9-]+\.)?script\.googleusercontent\.com$/.test(e.origin))return;
+   if(bridgeWindow&&e.source!==bridgeWindow)return;
+   if(e.data?.type==='eme-ready'){bridgeOrigin=e.origin;bridgeWindow=e.source;ready=true;bridgeWindow.postMessage({type:'eme-save',channel:bridgeChannel,requestId,payload},bridgeOrigin);}
    if(e.data?.type==='eme-saved'&&e.data.requestId===requestId){cleanup();e.data.ok?resolve(e.data):reject(new Error(e.data.error||'No se confirmó el envío'));}
   };
   window.addEventListener('message',handler);
   const timer=setTimeout(()=>{cleanup();reject(new Error('No se ha recibido confirmación.'));},12000);
-  if(!bridge){bridge=document.createElement('iframe');bridge.id='bridge';bridge.src=C.endpoint;bridge.title='Receptor de respuestas';document.body.append(bridge);}
-  else if(bridgeOrigin){ready=true;bridge.contentWindow.postMessage({type:'eme-save',requestId,payload},bridgeOrigin);}else bridge.src=C.endpoint;
+  if(!bridge){bridge=document.createElement('iframe');bridge.id='bridge';bridge.src=C.endpoint+'?channel='+bridgeChannel;bridge.title='Receptor de respuestas';document.body.append(bridge);}
+  else if(bridgeOrigin){ready=true;bridgeWindow.postMessage({type:'eme-save',channel:bridgeChannel,requestId,payload},bridgeOrigin);}else bridge.src=C.endpoint+'?channel='+bridgeChannel;
  });
 }
 async function send(){

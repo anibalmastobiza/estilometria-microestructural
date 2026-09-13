@@ -4,10 +4,20 @@
  * ALLOWED_ORIGIN = https://anibalmastobiza.github.io (sin ruta ni barra final).
  */
 const HEADERS=['received_at_utc','session_id','protocol_version','consent_version','age_band','spanish_level','education','reading_frequency','gender','list_id','bank_id','elapsed_ms','gaze_status','validation_json','viewport_json','quality_json','trials_json'];
-function doGet(){
+function doGet(e){
  const t=HtmlService.createTemplateFromFile('Bridge');
  t.origin=PropertiesService.getScriptProperties().getProperty('ALLOWED_ORIGIN')||'';
+ t.channel=/^[\w-]{36}$/.test(e?.parameter?.channel||'')?e.parameter.channel:'';
  return t.evaluate().setTitle('Receptor EME').setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
+}
+function checkConnection(){
+ const p=PropertiesService.getScriptProperties();
+ const s=SpreadsheetApp.openById(p.getProperty('SHEET_ID')).getSheetByName('Sesiones');
+ assert_(s,'Falta Sesiones');
+ const header=s.getRange(1,1,1,HEADERS.length);
+ assert_(JSON.stringify(header.getValues()[0])===JSON.stringify(HEADERS),'Cabecera incompatible');
+ header.setValues([HEADERS]);SpreadsheetApp.flush();
+ return {ok:true,open:p.getProperty('COLLECTION_OPEN')==='true'};
 }
 function assert_(x,m){if(!x)throw new Error(m);}
 function enum_(v,values){assert_(values.indexOf(v)>=0,'Valor no permitido');return v;}
