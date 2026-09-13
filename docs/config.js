@@ -1,6 +1,6 @@
 export const CONFIG = Object.freeze({
   mode: 'demo', // Cambiar a 'live' solo tras desplegar y probar el receptor.
-  endpoint: '', // URL /exec de la aplicación web de Google Apps Script.
+  endpoint: 'https://script.google.com/macros/s/AKfycbybu7e0vvartUyZIybQs3lVGOsOc5PXJZHaeeM0FbwA7u3lEvfSl-6F7foLKLW6i6F_7A/exec', // URL /exec de la aplicación web de Google Apps Script.
   researcher: 'Aníbal Astobiza',
   institution: 'Universidad de Granada (UGR)',
   email: 'amastobiza@ugr.es',
