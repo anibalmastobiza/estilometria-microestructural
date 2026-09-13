@@ -13,7 +13,7 @@ const session={session_id:crypto.randomUUID(),protocol_version:C.protocol,consen
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const view=html=>{app.innerHTML=html;window.scrollTo(0,0);};
 const elapsed=()=>Math.round(performance.now()-start);
-function stopCamera(){gazeHandler=null;if(window.webgazer){try{window.webgazer.clearGazeListener();window.webgazer.end();window.webgazer.clearData();}catch{}}camera=false;document.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks().forEach(t=>t.stop()));}
+function stopCamera(){document.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks().forEach(t=>t.stop()));gazeHandler=null;if(window.webgazer){try{window.webgazer.clearGazeListener();window.webgazer.end();window.webgazer.clearData();}catch{}}camera=false;document.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks().forEach(t=>t.stop()));}
 function exit(reason='withdrawn'){
  if(stopped||submitted)return;stopped=true;clearTimers();clearTimeout(watchdog);stopCamera();
  document.querySelectorAll('.overlay,.dot').forEach(e=>e.remove());exitButton.hidden=true;
@@ -30,13 +30,13 @@ function landing(){
  if(C.mode==='live'&&!/^https:\/\/script\.google\.com\/macros\/s\/[\w-]+\/exec$/.test(C.endpoint)){view('<h1>Estudio aún no disponible</h1><p>La recogida no está configurada.</p>');return;}
  view(`<p class="muted">Estudio de lectura · Personas de 18 años o más</p><h1>Leer y retomar el hilo.</h1>
  ${C.mode==='demo'?'<p class="notice">Demostración: las respuestas no se envían ni se guardan en Google Sheets.</p>':''}
- <p>Leerás cuatro textos breves y responderás una pregunta sobre cada uno. En algunos aparecerá una tarea breve con un número. La sesión se cierra a los 4 minutos y 50 segundos desde esta pantalla, aunque no termines. Puedes salir en cualquier momento.</p>
+ <p>Cuatro lecturas con preguntas y breves interrupciones. Máximo 4 minutos y 50 segundos desde esta pantalla.</p>
  <details open><summary><strong>Información y consentimiento</strong></summary>
- <p>Estudio: <em>Microestructura textual y lectura interrumpida</em>. Investigador: ${esc(C.researcher)}, ${esc(C.institution)}. Contacto: <a href="mailto:${esc(C.email)}">${esc(C.email)}</a>.</p>
- <p>Participar es voluntario, sin remuneración ni beneficio individual directo. Puede producir cansancio leve o frustración por las interrupciones. Puedes omitir preguntas demográficas opcionales y salir sin penalización.</p>
- <p>Recogeremos respuestas, tiempos, franja de edad, dominio del español y datos demográficos opcionales, además del tamaño de ventana y cambios de pestaña. Usamos un código aleatorio, no tu nombre ni correo. Si eliges la cámara, se procesa localmente para estimar la mirada: no grabamos ni enviamos imágenes, vídeo o audio. Solo enviamos resúmenes de precisión y retorno al área del texto.</p>
- <p>En el estudio activo, los datos se enviarán al final, con tu confirmación, a una hoja privada de Google Sheets del investigador y se conservarán durante ${C.retentionMonths} meses. GitHub aloja la página; Google y los servidores de bibliotecas reciben los datos técnicos habituales de conexión. No publicaremos registros individuales sin una revisión específica de anonimización; se prevén resultados agregados y código abierto.</p>
- <p>Puedes retirar tu consentimiento antes de enviar pulsando «Salir y borrar»; después, escribe al contacto indicando el código que recibirás. Para consultas sobre protección de datos de la UGR: <a href="mailto:dpd@ugr.es">dpd@ugr.es</a>. Puedes ejercer los derechos que correspondan y reclamar ante la AEPD. Versión ${esc(C.consent)}.</p></details>
+ <p>Investigador: ${esc(C.researcher)}, ${esc(C.institution)}. Contacto: <a href="mailto:${esc(C.email)}">${esc(C.email)}</a>.</p>
+ <p>Participar es voluntario y sin remuneración. Puedes omitir los datos opcionales y salir sin penalización. Las tareas pueden causar cansancio leve.</p>
+ <p>Recogemos respuestas, tiempos, datos demográficos y medidas técnicas de la sesión con un código aleatorio. La cámara es opcional: estima la mirada en tu ordenador, sin grabar ni enviar imágenes, vídeo o audio. Solo se envían medidas resumidas.</p>
+ <p>En el estudio activo, confirmarás el envío a una hoja privada de Google Sheets. Conservaremos los datos ${C.retentionMonths} meses y publicaremos resultados agregados. GitHub, Google y los proveedores de bibliotecas reciben datos técnicos de conexión.</p>
+ <p>Puedes salir y borrar antes del envío. Después, solicita la retirada o ejerce tus derechos escribiéndome e indicando tu código. Puedes reclamar ante la AEPD. Consentimiento ${esc(C.consent)}.</p></details>
  <form id="consent"><label><input type="checkbox" required name="adult">Tengo 18 años o más y puedo leer español con fluidez.</label><label><input type="checkbox" required name="agree">He leído la información y acepto participar y el tratamiento descrito.</label><label><input type="checkbox" name="webcam">Acepto, de forma opcional, usar mi cámara para estimar la mirada.</label><div class="buttons"><button type="submit">Continuar</button><button type="button" class="secondary" id="decline">No participar</button></div></form>`);
  document.querySelector('#decline').onclick=()=>exit();
  document.querySelector('#consent').onsubmit=e=>{e.preventDefault();session.consent_accepted=true;session.camera_consent=new FormData(e.target).has('webcam');session.consent_elapsed_ms=elapsed();exitButton.hidden=false;demographics();};
@@ -55,12 +55,15 @@ function demographics(){
 function cameraIntro(){view('<h1>Preparar la cámara</h1><p>Busca buena iluminación y mantén la cabeza estable. La cámara es opcional. Después mirarás y pulsarás unos puntos; al validar solo tendrás que mirarlos.</p><div class="buttons"><button id="camera">Activar cámara</button><button class="secondary" id="skip">Continuar sin cámara</button></div>');document.querySelector('#skip').onclick=instructions;document.querySelector('#camera').onclick=initCamera;}
 async function initCamera(){
  view('<h1>Conectando la cámara…</h1><p>Acepta el permiso del navegador si deseas usarla. No se solicitará micrófono.</p><button class="secondary" id="skip">Continuar sin cámara</button>');
- let abandoned=false;const fail=()=>{if(abandoned||stopped)return;abandoned=true;stopCamera();session.gaze_status='failed';instructions();};document.querySelector('#skip').onclick=fail;
+ let abandoned=false;const fail=(error)=>{if(abandoned||stopped)return;abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';
+ const message=error?.name==='NotAllowedError'?'El navegador no ha permitido la cámara. Revisa el permiso de cámara de esta página.':error?.name==='NotFoundError'?'No se ha encontrado una cámara conectada.':'No se pudo iniciar la cámara. Comprueba los permisos y que otra aplicación no la esté usando.';
+ view(`<h1>La cámara no se ha activado</h1><p>${message}</p><p>Puedes recargar para intentarlo de nuevo o elegir continuar sin cámara.</p><button id="skip">Continuar sin cámara</button>`);document.querySelector('#skip').onclick=instructions;
+ };document.querySelector('#skip').onclick=()=>{abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';instructions();};
  const timeout=after(fail,25000);
  try{
   if(!window.webgazer)await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=C.webgazerURL;s.onload=resolve;s.onerror=reject;document.head.append(s);});
   if(abandoned||stopped)return;
-  window.webgazer.saveDataAcrossSessions(false);await window.webgazer.clearData();
+  window.saveDataAcrossSessions=false;await window.webgazer.clearData();
   window.webgazer.setGazeListener((data)=>{if(data&&gazeHandler)gazeHandler(data,performance.now());});
   await window.webgazer.begin();
   if(abandoned||stopped){stopCamera();return;}
@@ -68,7 +71,7 @@ async function initCamera(){
   window.webgazer.showPredictionPoints(false);window.webgazer.showVideoPreview(true);camera=true;
   view('<h1>Ajusta tu posición</h1><p>Comprueba que se ve tu rostro. Si la cámara no funciona, continúa sin ella.</p><div class="buttons"><button id="ready">Calibrar: mirar y pulsar puntos</button><button id="skip" class="secondary">Continuar sin cámara</button></div>');
   document.querySelector('#ready').onclick=calibrate;document.querySelector('#skip').onclick=()=>{stopCamera();session.gaze_status='failed';instructions();};
- }catch{fail();}
+ }catch(error){fail(error);}
 }
 function calibrate(){
  window.webgazer.showVideoPreview(false);view('<h1>Calibración</h1><p>Mira cada punto y pulsa dos veces. Mantén la cabeza estable.</p>');
