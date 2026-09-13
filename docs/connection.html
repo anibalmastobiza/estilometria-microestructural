@@ -6,7 +6,7 @@ const channel=crypto.randomUUID(),requestId=crypto.randomUUID();let target=null;
 const frame=document.createElement('iframe');frame.hidden=true;frame.src=CONFIG.endpoint+'?channel='+channel;
 const timeout=setTimeout(()=>{r.textContent='No se recibió confirmación. Revisar despliegue, permisos y origen.';cleanup();},20000);
 const cleanup=()=>{clearTimeout(timeout);window.removeEventListener('message',receive);frame.remove();b.disabled=false;};
-function receive(e){if(e.data?.channel!==channel||!/^https:\/\/([a-z0-9-]+\.)?script\.googleusercontent\.com$/.test(e.origin)||(target&&e.source!==target))return;
+function receive(e){if(e.data?.channel!==channel||!/^https:\/\/([a-z0-9-]+[.-])?script\.googleusercontent\.com$/.test(e.origin)||(target&&e.source!==target))return;
 if(e.data.type==='eme-ready'){target=e.source;target.postMessage({type:'eme-check',channel,requestId},e.origin);}
 if(e.data.type==='eme-saved'&&e.data.requestId===requestId){r.textContent=e.data.ok?'Conexión y escritura verificadas. Recogida '+(e.data.open?'abierta.':'cerrada.'):'El receptor respondió, pero la escritura no se confirmó.';cleanup();}}
 window.addEventListener('message',receive);r.textContent='Comprobando…';document.body.append(frame);};
