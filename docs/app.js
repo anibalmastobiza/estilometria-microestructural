@@ -2,7 +2,7 @@ import {CONFIG as C} from './config.js';
 import {schedule,renderText,mulberry32,shuffle} from './stimuli.js';
 const app=document.querySelector('#app'),exitButton=document.querySelector('#withdraw');
 const start=performance.now();
-let stopped=false,submitted=false,watchdog,jsPsych,gazeHandler=null,camera=false;
+let stopped=false,submitted=false,watchdog,jsPsych,gazeHandler=null,camera=false,lastEyeFeatures=null;
 const timers=new Set();
 const after=(fn,ms)=>{const t=setTimeout(()=>{timers.delete(t);if(!stopped)fn();},ms);timers.add(t);return t;};
 const clearTimers=()=>{for(const t of timers)clearTimeout(t);timers.clear();};
@@ -13,7 +13,16 @@ const session={session_id:crypto.randomUUID(),protocol_version:C.protocol,consen
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const view=html=>{app.innerHTML=html;window.scrollTo(0,0);};
 const elapsed=()=>Math.round(performance.now()-start);
-function stopCamera(){document.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks().forEach(t=>t.stop()));gazeHandler=null;if(window.webgazer){try{window.webgazer.clearGazeListener();window.webgazer.end();window.webgazer.clearData();}catch{}}camera=false;document.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks().forEach(t=>t.stop()));}
+function stopCamera(){
+ gazeHandler=null;camera=false;lastEyeFeatures=null;
+ document.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks().forEach(t=>t.stop()));
+ if(window.webgazer){
+  try{window.webgazer.clearGazeListener();window.webgazer.end();}catch{}
+  // La versión fijada de end() puede fallar al quitar un vídeo anidado.
+  try{window.webgazer.clearData();}catch{}
+ }
+ document.querySelectorAll('#webgazerVideoContainer,#webgazerGazeDot,#webgazerVideoFeed,#webgazerVideoCanvas,#webgazerFaceOverlay,#webgazerFaceFeedbackBox').forEach(e=>e.remove());
+}
 function exit(reason='withdrawn'){
  if(stopped||submitted)return;stopped=true;clearTimers();clearTimeout(watchdog);stopCamera();
  document.querySelectorAll('.overlay,.dot').forEach(e=>e.remove());exitButton.hidden=true;
@@ -60,7 +69,7 @@ function cameraProblem(message,retry=true){
 }
 async function initCamera(){
  if(stopped)return;if(!session.camera_consent){exit('camera');return;}
- session.validation=[];session.gaze_status='failed';
+ session.validation=[];session.gaze_status='failed';lastEyeFeatures=null;
  view('<h1>Conectando la cámara…</h1><p>Acepta el permiso de cámara del navegador para participar. No se solicitará micrófono.</p>');
  let abandoned=false,initializing=true;const fail=(error)=>{if(abandoned||stopped)return;abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';
  const message=error?.name==='NotAllowedError'?'El navegador no ha permitido la cámara. Revisa el permiso de cámara de esta página.':error?.name==='NotFoundError'?'No se ha encontrado una cámara conectada.':'No se pudo iniciar la cámara. Comprueba los permisos y que otra aplicación no la esté usando.';
@@ -71,11 +80,14 @@ async function initCamera(){
   if(!window.webgazer)await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=C.webgazerURL;s.onload=resolve;s.onerror=reject;document.head.append(s);});
   if(abandoned||stopped)return;
   window.saveDataAcrossSessions=false;await window.webgazer.clearData();
-  window.webgazer.setGazeListener((data)=>{if(Number.isFinite(data?.x)&&Number.isFinite(data?.y)&&gazeHandler)gazeHandler(data,performance.now());});
+  window.webgazer.setGazeListener((data)=>{if(data?.eyeFeatures)lastEyeFeatures=data.eyeFeatures;if(Number.isFinite(data?.x)&&Number.isFinite(data?.y)&&gazeHandler)gazeHandler(data,performance.now());});
   await window.webgazer.begin();initializing=false;
   if(abandoned||stopped){stopCamera();return;}
   window.webgazer.removeMouseEventListeners();
   window.webgazer.showPredictionPoints(false);window.webgazer.showVideo(true);window.webgazer.showFaceOverlay(true);window.webgazer.showFaceFeedbackBox(true);window.webgazer.showVideoPreview(true);camera=true;
+  document.querySelector('#webgazerVideoContainer')?.classList.remove('tracking-video');
+  const video=document.querySelector('#webgazerVideoFeed');if(video){video.muted=true;await video.play();}
+  if(abandoned||stopped){stopCamera();return;}
   document.querySelectorAll('video').forEach(v=>v.srcObject?.getVideoTracks().forEach(t=>t.addEventListener('ended',()=>exit('camera'),{once:true})));
   view('<h1>Ajusta tu posición</h1><p>Comprueba que se ve tu rostro y mantén la cámara activa durante todo el estudio.</p><p id="face-status" role="status">Esperando a que se detecte tu rostro. Mira hacia la pantalla.</p><button id="ready" disabled>Calibrar: mirar y pulsar puntos</button>');
   const ready=document.querySelector('#ready');ready.onclick=calibrate;
@@ -87,12 +99,19 @@ function calibrate(){
  if(stopped)return;if(!camera||!session.camera_consent){cameraProblem('La cámara debe estar activa para calibrar.');return;}
  if(!faceReady()){cameraProblem('No se detecta tu rostro. Mira hacia la pantalla y revisa la iluminación.');return;}
  session.validation=[];session.gaze_status='failed';
- window.webgazer.showVideoPreview(false);view('<h1>Calibración</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto y haz dos clics sobre él sin apartar la mirada. Cuando cambie de posición, mueve únicamente los ojos para mirar el siguiente punto y repite los dos clics.</p><p id="calibration-status" role="status"></p>');
+ // Mantener el vídeo renderizado evita depender de la reproducción con display:none.
+ window.webgazer.showFaceOverlay(false);window.webgazer.showFaceFeedbackBox(false);
+ document.querySelector('#webgazerVideoContainer')?.classList.add('tracking-video');
+ view('<h1>Calibración</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto y haz dos clics separados, esperando a que el punto vuelva a ponerse rojo. No hagas doble clic. Cuando cambie de posición, mueve únicamente los ojos para mirar el siguiente punto y repite.</p><p id="calibration-status" role="status"></p>');
  const points=shuffle([[15,20],[50,20],[85,20],[15,50],[50,50],[85,50],[15,80],[50,80],[85,80]],rng);let i=0,count=0;
  const b=document.createElement('button');b.className='dot';b.setAttribute('aria-label','Punto de calibración');document.body.append(b);
- const place=()=>{b.disabled=true;b.style.left=points[i][0]+'vw';b.style.top=points[i][1]+'vh';after(()=>{b.disabled=false;},400);};place();
- const timeout=after(()=>{b.remove();session.gaze_status='failed';cameraProblem('No se ha completado la calibración a tiempo.');},35000);
- b.onclick=()=>{if(b.disabled||stopped)return;const status=document.querySelector('#calibration-status');if(!faceReady()){status.textContent='No se detecta tu rostro. Mira hacia la pantalla antes de volver a hacer clic.';return;}const model=window.webgazer.getRegression()[0],before=model.getData().length,r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');if(model.getData().length===before){status.textContent='No se ha registrado la mirada. Mantén la mirada en el punto y vuelve a hacer clic.';return;}status.textContent='';if(++count===2){count=0;if(++i===points.length){clearTimeout(timeout);b.remove();validate();}else place();}};
+ const status=document.querySelector('#calibration-status'),video=document.querySelector('#webgazerVideoFeed');let previousEyes=null;
+ const arm=delay=>{b.disabled=true;after(()=>{let positions=window.webgazer.getTracker().getPositions(),newFrames=0;const videoTime=video?.currentTime;
+  const fresh=()=>{if(b.removed||stopped)return;const current=window.webgazer.getTracker().getPositions();if(current&&current!==positions){positions=current;newFrames++;}if(faceReady()&&newFrames>=2&&(!video||video.currentTime>videoTime)&&(!previousEyes||lastEyeFeatures&&lastEyeFeatures!==previousEyes)){b.disabled=false;status.textContent=count?'Haz el segundo clic sin apartar la mirada.':'Mira el centro del punto y haz el primer clic.';}else{status.textContent='Mantén la mirada en el punto. Esperando una imagen nueva de la cámara.';after(fresh,50);}};fresh();
+ },delay);};
+ const place=()=>{b.style.left=points[i][0]+'vw';b.style.top=points[i][1]+'vh';arm(1000);};place();
+ const timeout=after(()=>{b.removed=true;b.remove();session.gaze_status='failed';cameraProblem('La calibración no ha recibido suficientes imágenes nuevas a tiempo. Comprueba que la vista previa se mueve al ajustar tu posición.');},60000);
+ b.onclick=()=>{if(b.disabled||stopped)return;if(!faceReady()){status.textContent='Se ha perdido el seguimiento del rostro. Mira hacia la pantalla.';arm(300);return;}const model=window.webgazer.getRegression()[0],before=model.getData().length,r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');if(model.getData().length===before){status.textContent='No se ha registrado una imagen de los ojos. Mantén la mirada en el punto.';arm(300);return;}previousEyes=model.getData().at(-1).eyes;status.textContent='';if(++count===2){count=0;if(++i===points.length){clearTimeout(timeout);b.removed=true;b.remove();validate();}else place();}else arm(300);};
 }
 function validate(){
  view('<h1>Calibración completada</h1><p>Ahora verás cinco puntos que cambian de posición solos. Mantén la cabeza fija, sin moverla ni girarla, y mira el centro de cada punto hasta que cambie de posición. Sigue cada punto moviendo únicamente los ojos, sin hacer clic.</p><button id="validate">Comenzar comprobación</button>');
@@ -100,11 +119,22 @@ function validate(){
 }
 function validateGaze(){
  view('<h1>Comprobación de la mirada</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto hasta que cambie de posición y sigue el siguiente moviendo únicamente los ojos, sin hacer clic. Esta fase mide la precisión; no entrena el sistema.</p>');
- const points=[[25,30],[75,30],[50,50],[25,70],[75,70]];let i=0;
+ const points=[[25,30],[75,30],[50,50],[25,70],[75,70]];let i=0;const centers=[],completeWindows=[];
  const b=document.createElement('span');b.className='dot';document.body.append(b);
- function next(){if(i===points.length){b.remove();gazeHandler=null;const valid=session.validation.length===5&&session.validation.every(v=>v.n>=5&&v.in_roi>=.5);session.gaze_status=valid?'valid':'invalid';if(valid)instructions();else cameraProblem('La mirada no se ha registrado con suficiente precisión. Revisa la iluminación, mantén la cabeza fija y vuelve a calibrar.');return;}
-  const [px,py]=points[i++],x=innerWidth*px/100,y=innerHeight*py/100;b.style.left=px+'vw';b.style.top=py+'vh';let errors=[];gazeHandler=null;
-  after(()=>{gazeHandler=d=>errors.push(Math.hypot(d.x-x,d.y-y));after(()=>{gazeHandler=null;session.validation.push({x,y,n:errors.length,in_roi:errors.length?errors.filter(e=>e<=150).length/errors.length:0,mean_error_px:errors.length?Math.round(errors.reduce((a,b)=>a+b,0)/errors.length):null,samples_per_sec:errors.length});next();},1000);},400);
+ function next(){if(i===points.length){b.remove();gazeHandler=null;const valid=session.validation.length===5&&completeWindows.every(Boolean)&&session.validation.every(v=>v.n>=5&&v.in_roi>=.5);session.gaze_status=valid?'valid':'invalid';if(valid)instructions();else{
+  const enough=completeWindows.every(Boolean)&&session.validation.every(v=>v.n>=5),staticGaze=centers.length===5&&centers.every(p=>Math.hypot(p.x-centers[0].x,p.y-centers[0].y)<30);
+  cameraProblem(!enough?'No llegan suficientes muestras nuevas de mirada. La vista previa puede mostrar el rostro aunque el seguimiento no se actualice.':staticGaze?'La estimación permanece en la misma zona aunque los puntos cambien. El seguimiento no está distinguiendo la dirección de la mirada. Prueba a abrir el estudio en Chrome o Edge.':'Se recibe la mirada, pero su posición no coincide con los puntos con suficiente precisión. Mantén la cabeza fija y vuelve a calibrar.');
+ }return;}
+  const [px,py]=points[i++],x=innerWidth*px/100,y=innerHeight*py/100;b.style.left=px+'vw';b.style.top=py+'vh';const shown=performance.now();let errors=[],samples=[],warmFrames=0,measureStart=null,previousFeatures=null,done=false,measureTimer;
+  const finishPoint=force=>{if(done||(!force&&(measureStart===null||performance.now()-measureStart<1500||errors.length<5)))return;done=true;clearTimeout(limit);clearTimeout(measureTimer);gazeHandler=null;const duration=measureStart===null?0:performance.now()-measureStart;completeWindows.push(duration>=1500);
+   session.validation.push({x,y,n:errors.length,in_roi:errors.length?errors.filter(e=>e<=150).length/errors.length:0,mean_error_px:errors.length?Math.round(errors.reduce((a,b)=>a+b,0)/errors.length):null,samples_per_sec:duration?errors.length*1000/duration:0});
+   if(samples.length)centers.push({x:samples.reduce((n,p)=>n+p.x,0)/samples.length,y:samples.reduce((n,p)=>n+p.y,0)/samples.length});next();
+  };
+  const limit=after(()=>finishPoint(true),7000);
+  gazeHandler=(d,t)=>{if(d.eyeFeatures&&d.eyeFeatures===previousFeatures)return;previousFeatures=d.eyeFeatures;const captured=Number.isFinite(d.t)?d.t:t;if(captured<shown)return;
+   if(measureStart===null){warmFrames++;if(captured-shown>=1200&&warmFrames>=6){measureStart=t;measureTimer=after(()=>finishPoint(false),1500);}return;}
+   errors.push(Math.hypot(d.x-x,d.y-y));samples.push({x:d.x,y:d.y});finishPoint(false);
+  };
  }next();
 }
 function instructions(){
