@@ -6,7 +6,7 @@ Experimento breve en español sobre puntuación, lectura e interrupciones. Inves
 
 - Sitio estático para GitHub Pages en `docs/`, con jsPsych 8.3.0 y WebGazer cargado únicamente después del consentimiento de cámara.
 - Diseño 2 × 2, cuatro lecturas por participante, ocho estímulos de control, listas contrabalanceadas y orden aleatorio.
-- Información, consentimiento, demografía, cámara opcional, calibración, validación, retirada y explicación final.
+- Información, consentimiento, demografía, cámara obligatoria, calibración, validación, retirada y explicación final con envío automático.
 - Receptor Google Apps Script con confirmación de escritura, validación de campos y deduplicación.
 - Protocolo, corpus abiertos, plan para RHD, extracción textual y análisis R.
 
@@ -33,7 +33,7 @@ El contraste es una **interacción**: la ventaja de segmentar debería ser mayor
 - [Despliegue y Google Sheets](DESPLIEGUE.md)
 - [Verificaciones](research/VERIFICACION.md)
 
-La mirada se utiliza de forma exploratoria sobre el área del texto; no mide fijaciones sobre comas. Se guardan agregados, no imágenes ni coordenadas crudas. No publicar datos individuales en este repositorio.
+La mirada se utiliza de forma exploratoria sobre el área del texto; no mide fijaciones sobre comas. La versión 1.1 guarda agregados y trayectorias de coordenadas estimadas y tiempos durante las lecturas, sin imágenes ni vídeo. Véase [formato de trayectorias](research/TRAYECTORIAS.md). No publicar datos individuales en este repositorio.
 
 ## Licencias
 

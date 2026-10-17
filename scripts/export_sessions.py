@@ -3,6 +3,10 @@ python3 scripts/export_sessions.py data/Sesiones.csv data/ensayos.csv
 No publicar los CSV individuales en GitHub.
 """
 import csv,json,sys,pathlib
+
+SESSION_FIELDS=['session_id','protocol_version','age_band','spanish_level','education','reading_frequency','gender','list_id','bank_id','elapsed_ms','gaze_status']
+QUALITY_FIELDS=['hidden','resize','aoi_json']
+
 def convert(source,destination):
     rows=[]
     with open(source,encoding='utf-8-sig',newline='') as f:
@@ -13,13 +17,16 @@ def convert(source,destination):
             seen.add(sid)
             quality=json.loads(s['quality_json'])
             for t in json.loads(s['trials_json']):
-                base={k:s[k] for k in ['session_id','protocol_version','age_band','spanish_level','education','reading_frequency','gender','list_id','bank_id','elapsed_ms','gaze_status']}
+                base={k:s[k] for k in SESSION_FIELDS}
                 base.update({k:v for k,v in t.items() if k!='aoi'})
+                if 'gaze_path' in t:
+                    base['gaze_path']=json.dumps(t['gaze_path'],separators=(',',':'))
                 base.update({'hidden':quality['hidden'],'resize':quality['resize'],'aoi_json':json.dumps(t['aoi'])})
                 rows.append(base)
     if not rows: raise ValueError('Sin respuestas: no se generan resultados ficticios.')
     pathlib.Path(destination).parent.mkdir(parents=True,exist_ok=True)
     with open(destination,'w',encoding='utf-8',newline='') as f:
-        writer=csv.DictWriter(f,fieldnames=list(rows[0]));writer.writeheader();writer.writerows(rows)
+        trial_fields=sorted(set().union(*(row.keys() for row in rows))-set(SESSION_FIELDS)-set(QUALITY_FIELDS))
+        writer=csv.DictWriter(f,fieldnames=SESSION_FIELDS+trial_fields+QUALITY_FIELDS);writer.writeheader();writer.writerows(rows)
     print(f'{len(seen)} sesiones; {len(rows)} ensayos -> {destination}')
 if __name__=='__main__':convert(*sys.argv[1:3])

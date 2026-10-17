@@ -50,7 +50,11 @@ El ensayo de transmisión debe identificarse y separarse del análisis, con auto
 
 Ejecutar desde el editor `installRetentionTrigger_` para instalar una purga diaria de filas de más de 12 meses. No está instalado por incluir el archivo. Revisar permisos, cuotas, historial/versiones y copias: borrar filas no garantiza eliminar todas las copias del proveedor. Exportaciones locales deben entrar en la misma política.
 
-Una solicitud de retirada se resuelve buscando el código exacto en `session_id` y eliminando únicamente esa sesión y sus exportaciones. No existe un endpoint público de lectura o borrado. Cerrar la recogida con `COLLECTION_OPEN=false`.
+No se entrega un código de retirada al participante. Las solicitudes llegan por contacto con el investigador y requieren identificar con certeza la sesión antes de eliminarla y gestionar sus exportaciones. `session_id` permanece como identificador interno y control de duplicados. No existe un endpoint público de lectura o borrado. Cerrar la recogida con `COLLECTION_OPEN=false`.
+
+## Actualización a la versión 1.1
+
+Actualizar primero `Code.gs` en el proyecto Apps Script existente y publicar una nueva versión de su implementación conservando la URL `/exec`. El receptor acepta sesiones 1.0 ya abiertas y sesiones 1.1 con cámara consentida, validación válida y trayectoria. Después publicar `docs/app.js` y `docs/config.js`, con protocolo EME-INT-1.1.0 y consentimiento EME-CI-1.1.0. No cambiar las 17 cabeceras de `Sesiones`: `gaze_path` y los tiempos de interrupción se guardan dentro de `trials_json`, en la columna Q. No activar el formulario 1.1 antes de actualizar el receptor, pues el receptor anterior rechaza la nueva versión.
 
 ## 6. Exportar y analizar
 

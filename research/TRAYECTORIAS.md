@@ -1,0 +1,22 @@
+# Trayectorias de mirada
+
+El protocolo EME-INT-1.1.0 conserva los resúmenes de mirada e incorpora una trayectoria por ensayo dentro de `trials_json`. Son estimaciones de posición de mirada obtenidas con WebGazer. No se guardan imágenes, vídeo ni audio. Esta descripción documenta el formato y propone análisis exploratorios; no presenta resultados empíricos.
+
+| Campo | Contenido |
+| --- | --- |
+| `gaze_path` | Lista de tripletas enteras `[t_ms, x_px, y_px]`. |
+| `t_ms` | Milisegundos desde el inicio del ensayo de lectura. Incluye el tiempo transcurrido durante una interrupción. |
+| `x_px`, `y_px` | Coordenadas en píxeles del viewport del navegador, con origen en la esquina superior izquierda. Se conservan estimaciones fuera del viewport. |
+| `interruption_start_ms` | Inicio real de la interrupción respecto del mismo origen temporal; `null` si no hubo interrupción. |
+| `interruption_end_ms` | Fin real de la interrupción respecto del mismo origen temporal; `null` si no hubo interrupción. |
+| `aoi` | Rectángulo del texto, con origen `x`, `y` y dimensiones `w`, `h`, en el mismo sistema de coordenadas. |
+
+Se retienen muestras durante la lectura activa, separadas por al menos 95 ms, aproximadamente 10 Hz como máximo. Se guardan como máximo 350 muestras por lectura y se descartan coordenadas redondeadas fuera del intervalo de -100000 a 100000 píxeles. La trayectoria omite la interrupción y la fase de respuesta. Las diferencias entre tiempos consecutivos permiten reconocer esos huecos. La tasa efectiva depende de la disponibilidad de estimaciones; no debe suponerse un muestreo uniforme ni rellenarse la interrupción con una posición interpolada. Coordenadas y tiempos se redondean a enteros. Una muestra anterior a la interrupción puede compartir su milisegundo de inicio por redondeo. Los conteos dentro del texto se calculan antes de redondear las coordenadas; al reconstruirlos desde la trayectoria pueden diferir en muestras situadas en el borde del rectángulo.
+
+Los conteos `gaze_n`, `gaze_inside`, `gaze_post_n`, `gaze_post_inside` y la latencia `gaze_return_ms` siguen disponibles. La trayectoria permite comprobar y ampliar descriptivamente esos resúmenes. Los usos exploratorios propuestos incluyen mapas de posiciones, proporción de muestras dentro del texto y evolución espacial antes y después de la interrupción. Para comparar pantallas, se pueden expresar las posiciones respecto del rectángulo `aoi`, conservando las coordenadas originales. Los resultados dependen de la calibración, de la validación registrada y de la continuidad de las muestras.
+
+El estado `valid` acredita el criterio operativo de validación del estudio. No establece precisión suficiente para identificar palabras ni constituye validación científica del instrumento. Este registro de baja frecuencia no permite dar por identificadas fijaciones, sacadas o regresiones oculares; tampoco permite diagnósticos. La separación entre dos puntos puede reflejar ruido de estimación. La detección de eventos oculares y cualquier interpretación confirmatoria requieren validación adicional y un plan de análisis previo.
+
+`scripts/export_sessions.py` transforma la hoja de sesiones en una fila por ensayo. En el CSV resultante, `gaze_path` contiene JSON válido y `aoi_json` conserva el rectángulo. La exportación usa la unión de columnas de todos los ensayos con orden determinista y admite sesiones 1.0 y 1.1 en un mismo archivo. Un campo de trayectoria ausente en sesiones anteriores queda vacío; una trayectoria presente sin muestras queda como `[]`. Los tiempos de interrupción `null` quedan vacíos en CSV. No equiparar ausencia de registro con ausencia de movimiento ocular.
+
+Los análisis deben conservar la versión del protocolo y separar la falta de trayectoria en versiones anteriores de los ensayos con trayectoria disponible. `scripts/analyze.R` acepta datos de la versión 1.0 o 1.1, pero exige una sola versión por ejecución para evitar combinar inadvertidamente criterios de participación distintos. No se han realizado análisis con participantes, verificación de precisión con cámara física ni validación empírica de estas propuestas en este documento.

@@ -18,7 +18,7 @@ function exit(reason='withdrawn'){
  if(stopped||submitted)return;stopped=true;clearTimers();clearTimeout(watchdog);stopCamera();
  document.querySelectorAll('.overlay,.dot').forEach(e=>e.remove());exitButton.hidden=true;
  session.trials=[];session.validation=[];
- view(`<h1>${reason==='timeout'?'Tiempo finalizado':'Has salido del estudio'}</h1><p>No se han enviado tus respuestas. La cámara está apagada y los datos de esta sesión se han descartado.</p><p>Puedes cerrar esta pestaña.</p>`);
+ view(`<h1>${reason==='timeout'?'Tiempo finalizado':reason==='camera'?'No se pudo registrar la mirada':'Has salido del estudio'}</h1>${reason==='camera'?'<p>El estudio requiere la cámara activa y datos de mirada en cada lectura. Puedes recargar para intentarlo de nuevo.</p>':''}<p>No se han enviado tus respuestas. La cámara está apagada y los datos de esta sesión se han descartado.</p><p>Puedes cerrar esta pestaña.</p>`);
 }
 exitButton.onclick=()=>exit();
 window.addEventListener('pagehide',()=>{stopCamera();});
@@ -34,12 +34,12 @@ function landing(){
  <details open><summary><strong>Información y consentimiento</strong></summary>
  <p>Investigador: ${esc(C.researcher)}, ${esc(C.institution)}. Contacto: <a href="mailto:${esc(C.email)}">${esc(C.email)}</a>.</p>
  <p>Participar es voluntario y sin remuneración. Puedes omitir los datos opcionales y salir sin penalización. Las tareas pueden causar cansancio leve.</p>
- <p>No pedimos tu nombre ni correo. Guardamos respuestas, tiempos, datos demográficos y medidas técnicas con un código aleatorio de sesión. La cámara es opcional: estima la mirada en tu ordenador, sin grabar ni enviar imágenes, vídeo o audio. Solo se envían medidas resumidas.</p>
+ <p>No pedimos tu nombre ni correo. Guardamos respuestas, tiempos, datos demográficos y medidas técnicas con un identificador interno de sesión. Para participar es obligatorio usar la cámara: estima la mirada en tu ordenador, sin grabar ni enviar imágenes, vídeo o audio. Durante las lecturas guardamos las coordenadas estimadas de la mirada en la pantalla y el tiempo de cada muestra, además de los resúmenes de mirada y precisión de calibración.</p>
  <p>En el estudio activo, tus respuestas se enviarán automáticamente a una hoja privada de Google Sheets al terminar las cuatro lecturas y sus preguntas. Conservaremos los datos ${C.retentionMonths} meses y publicaremos resultados agregados. GitHub, Google y los proveedores de bibliotecas reciben datos técnicos de conexión.</p>
  <p>Puedes retirarte del estudio en cualquier momento. Si sales antes del envío, se descartan tus respuestas. Puedes contactar conmigo para conocer los resultados del estudio. Consentimiento ${esc(C.consent)}.</p></details>
- <form id="consent"><label><input type="checkbox" required name="adult">Tengo 18 años o más y puedo leer español con fluidez.</label><label><input type="checkbox" required name="agree">He leído la información y acepto participar y el tratamiento descrito.</label><label><input type="checkbox" name="webcam">Acepto, de forma opcional, usar mi cámara para estimar la mirada.</label><div class="buttons"><button type="submit">Continuar</button><button type="button" class="secondary" id="decline">No participar</button></div></form>`);
+ <form id="consent"><label><input type="checkbox" required name="adult">Tengo 18 años o más y puedo leer español con fluidez.</label><label><input type="checkbox" required name="agree">He leído la información y acepto participar y el tratamiento descrito.</label><label><input type="checkbox" required name="webcam">Acepto usar mi cámara y guardar las coordenadas y tiempos de mi mirada durante las lecturas. Es obligatorio para participar.</label><div class="buttons"><button type="submit">Continuar</button><button type="button" class="secondary" id="decline">No participar</button></div></form>`);
  document.querySelector('#decline').onclick=()=>exit();
- document.querySelector('#consent').onsubmit=e=>{e.preventDefault();session.consent_accepted=true;session.camera_consent=new FormData(e.target).has('webcam');session.consent_elapsed_ms=elapsed();exitButton.hidden=false;demographics();};
+ document.querySelector('#consent').onsubmit=e=>{e.preventDefault();if(!e.target.reportValidity()||!new FormData(e.target).has('webcam'))return;session.consent_accepted=true;session.camera_consent=true;session.consent_elapsed_ms=elapsed();exitButton.hidden=false;demographics();};
  watchdog=setTimeout(()=>exit('timeout'),C.totalBudgetMs);
 }
 function demographics(){
@@ -50,36 +50,49 @@ function demographics(){
  ${select('education','Estudios completados',[['secondary','Secundaria o menos'],['vocational','Formación profesional'],['university','Universitarios']])}
  ${select('reading_frequency','Lectura por ocio',[['rare','Menos de una vez por semana'],['weekly','Algunas veces por semana'],['daily','A diario']])}
  ${select('gender','Género',[['woman','Mujer'],['man','Hombre'],['other','Otra identidad']])}</div><button>Continuar</button></form>`);
- document.querySelector('#demo').onsubmit=e=>{e.preventDefault();Object.assign(session,Object.fromEntries(new FormData(e.target)));session.camera_consent?cameraIntro():instructions();};
+ document.querySelector('#demo').onsubmit=e=>{e.preventDefault();Object.assign(session,Object.fromEntries(new FormData(e.target)));cameraIntro();};
 }
-function cameraIntro(){view('<h1>Preparar la cámara</h1><p>Busca buena iluminación. Mantén la cabeza fija, sin moverla ni girarla, durante la calibración y la comprobación. Dirige la mirada al centro de cada punto, tanto cuando hagas clic como cuando solo tengas que mirarlo. Para seguir los puntos, mueve únicamente los ojos. La cámara es opcional.</p><div class="buttons"><button id="camera">Activar cámara</button><button class="secondary" id="skip">Continuar sin cámara</button></div>');document.querySelector('#skip').onclick=instructions;document.querySelector('#camera').onclick=initCamera;}
+function cameraIntro(){view('<h1>Preparar la cámara</h1><p>Busca buena iluminación. Mantén la cabeza fija, sin moverla ni girarla, durante la calibración y la comprobación. Dirige la mirada al centro de cada punto, tanto cuando hagas clic como cuando solo tengas que mirarlo. Para seguir los puntos, mueve únicamente los ojos. La cámara es obligatoria para participar.</p><button id="camera">Activar cámara</button>');document.querySelector('#camera').onclick=initCamera;}
+function cameraProblem(message,retry=true){
+ if(stopped)return;stopCamera();
+ view(`<h1>Comprueba la cámara</h1><p>${message}</p><p>Para continuar necesitas activar la cámara y superar la comprobación de la mirada. También puedes salir del estudio.</p><button id="retry-camera">${retry?'Reintentar cámara y calibración':'Recargar para reintentar'}</button>`);
+ document.querySelector('#retry-camera').onclick=retry?initCamera:()=>window.location.reload();
+}
 async function initCamera(){
- view('<h1>Conectando la cámara…</h1><p>Acepta el permiso del navegador si deseas usarla. No se solicitará micrófono.</p><button class="secondary" id="skip">Continuar sin cámara</button>');
- let abandoned=false;const fail=(error)=>{if(abandoned||stopped)return;abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';
+ if(stopped)return;if(!session.camera_consent){exit('camera');return;}
+ session.validation=[];session.gaze_status='failed';
+ view('<h1>Conectando la cámara…</h1><p>Acepta el permiso de cámara del navegador para participar. No se solicitará micrófono.</p>');
+ let abandoned=false,initializing=true;const fail=(error)=>{if(abandoned||stopped)return;abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';
  const message=error?.name==='NotAllowedError'?'El navegador no ha permitido la cámara. Revisa el permiso de cámara de esta página.':error?.name==='NotFoundError'?'No se ha encontrado una cámara conectada.':'No se pudo iniciar la cámara. Comprueba los permisos y que otra aplicación no la esté usando.';
- view(`<h1>La cámara no se ha activado</h1><p>${message}</p><p>Puedes recargar para intentarlo de nuevo o elegir continuar sin cámara.</p><button id="skip">Continuar sin cámara</button>`);document.querySelector('#skip').onclick=instructions;
- };document.querySelector('#skip').onclick=()=>{abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';instructions();};
+ cameraProblem(message,!initializing);
+ };
  const timeout=after(fail,25000);
  try{
   if(!window.webgazer)await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=C.webgazerURL;s.onload=resolve;s.onerror=reject;document.head.append(s);});
   if(abandoned||stopped)return;
   window.saveDataAcrossSessions=false;await window.webgazer.clearData();
-  window.webgazer.setGazeListener((data)=>{if(data&&gazeHandler)gazeHandler(data,performance.now());});
-  await window.webgazer.begin();
+  window.webgazer.setGazeListener((data)=>{if(Number.isFinite(data?.x)&&Number.isFinite(data?.y)&&gazeHandler)gazeHandler(data,performance.now());});
+  await window.webgazer.begin();initializing=false;
   if(abandoned||stopped){stopCamera();return;}
-  clearTimeout(timeout);window.webgazer.removeMouseEventListeners();
-  window.webgazer.showPredictionPoints(false);window.webgazer.showVideoPreview(true);camera=true;
-  view('<h1>Ajusta tu posición</h1><p>Comprueba que se ve tu rostro. Si la cámara no funciona, continúa sin ella.</p><div class="buttons"><button id="ready">Calibrar: mirar y pulsar puntos</button><button id="skip" class="secondary">Continuar sin cámara</button></div>');
-  document.querySelector('#ready').onclick=calibrate;document.querySelector('#skip').onclick=()=>{stopCamera();session.gaze_status='failed';instructions();};
- }catch(error){fail(error);}
+  window.webgazer.removeMouseEventListeners();
+  window.webgazer.showPredictionPoints(false);window.webgazer.showVideo(true);window.webgazer.showFaceOverlay(true);window.webgazer.showFaceFeedbackBox(true);window.webgazer.showVideoPreview(true);camera=true;
+  document.querySelectorAll('video').forEach(v=>v.srcObject?.getVideoTracks().forEach(t=>t.addEventListener('ended',()=>exit('camera'),{once:true})));
+  view('<h1>Ajusta tu posición</h1><p>Comprueba que se ve tu rostro y mantén la cámara activa durante todo el estudio.</p><p id="face-status" role="status">Esperando a que se detecte tu rostro. Mira hacia la pantalla.</p><button id="ready" disabled>Calibrar: mirar y pulsar puntos</button>');
+  const ready=document.querySelector('#ready');ready.onclick=calibrate;
+  const checkFace=()=>{if(abandoned||stopped)return;if(faceReady()){clearTimeout(timeout);ready.disabled=false;document.querySelector('#face-status').textContent='Rostro detectado. Ya puedes comenzar la calibración.';}else after(checkFace,100);};checkFace();
+ }catch(error){initializing=false;fail(error);}
 }
+function faceReady(){return Boolean(camera&&window.webgazer.isReady()&&window.webgazer.getTracker().getPositions()?.length);}
 function calibrate(){
- window.webgazer.showVideoPreview(false);view('<h1>Calibración</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto y haz dos clics sobre él sin apartar la mirada. Cuando cambie de posición, mueve únicamente los ojos para mirar el siguiente punto y repite los dos clics.</p>');
+ if(stopped)return;if(!camera||!session.camera_consent){cameraProblem('La cámara debe estar activa para calibrar.');return;}
+ if(!faceReady()){cameraProblem('No se detecta tu rostro. Mira hacia la pantalla y revisa la iluminación.');return;}
+ session.validation=[];session.gaze_status='failed';
+ window.webgazer.showVideoPreview(false);view('<h1>Calibración</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto y haz dos clics sobre él sin apartar la mirada. Cuando cambie de posición, mueve únicamente los ojos para mirar el siguiente punto y repite los dos clics.</p><p id="calibration-status" role="status"></p>');
  const points=shuffle([[15,20],[50,20],[85,20],[15,50],[50,50],[85,50],[15,80],[50,80],[85,80]],rng);let i=0,count=0;
  const b=document.createElement('button');b.className='dot';b.setAttribute('aria-label','Punto de calibración');document.body.append(b);
- const place=()=>{b.style.left=points[i][0]+'vw';b.style.top=points[i][1]+'vh';};place();
- const timeout=after(()=>{b.remove();stopCamera();session.gaze_status='failed';instructions();},35000);
- b.onclick=()=>{const r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');if(++count===2){count=0;if(++i===points.length){clearTimeout(timeout);b.remove();validate();}else place();}};
+ const place=()=>{b.disabled=true;b.style.left=points[i][0]+'vw';b.style.top=points[i][1]+'vh';after(()=>{b.disabled=false;},400);};place();
+ const timeout=after(()=>{b.remove();session.gaze_status='failed';cameraProblem('No se ha completado la calibración a tiempo.');},35000);
+ b.onclick=()=>{if(b.disabled||stopped)return;const status=document.querySelector('#calibration-status');if(!faceReady()){status.textContent='No se detecta tu rostro. Mira hacia la pantalla antes de volver a hacer clic.';return;}const model=window.webgazer.getRegression()[0],before=model.getData().length,r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');if(model.getData().length===before){status.textContent='No se ha registrado la mirada. Mantén la mirada en el punto y vuelve a hacer clic.';return;}status.textContent='';if(++count===2){count=0;if(++i===points.length){clearTimeout(timeout);b.remove();validate();}else place();}};
 }
 function validate(){
  view('<h1>Calibración completada</h1><p>Ahora verás cinco puntos que cambian de posición solos. Mantén la cabeza fija, sin moverla ni girarla, y mira el centro de cada punto hasta que cambie de posición. Sigue cada punto moviendo únicamente los ojos, sin hacer clic.</p><button id="validate">Comenzar comprobación</button>');
@@ -89,13 +102,14 @@ function validateGaze(){
  view('<h1>Comprobación de la mirada</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto hasta que cambie de posición y sigue el siguiente moviendo únicamente los ojos, sin hacer clic. Esta fase mide la precisión; no entrena el sistema.</p>');
  const points=[[25,30],[75,30],[50,50],[25,70],[75,70]];let i=0;
  const b=document.createElement('span');b.className='dot';document.body.append(b);
- function next(){if(i===points.length){b.remove();gazeHandler=null;const valid=session.validation.every(v=>v.n>=5&&v.in_roi>=.5);session.gaze_status=valid?'valid':'invalid';instructions();return;}
+ function next(){if(i===points.length){b.remove();gazeHandler=null;const valid=session.validation.length===5&&session.validation.every(v=>v.n>=5&&v.in_roi>=.5);session.gaze_status=valid?'valid':'invalid';if(valid)instructions();else cameraProblem('La mirada no se ha registrado con suficiente precisión. Revisa la iluminación, mantén la cabeza fija y vuelve a calibrar.');return;}
   const [px,py]=points[i++],x=innerWidth*px/100,y=innerHeight*py/100;b.style.left=px+'vw';b.style.top=py+'vh';let errors=[];gazeHandler=null;
   after(()=>{gazeHandler=d=>errors.push(Math.hypot(d.x-x,d.y-y));after(()=>{gazeHandler=null;session.validation.push({x,y,n:errors.length,in_roi:errors.length?errors.filter(e=>e<=150).length/errors.length:0,mean_error_px:errors.length?Math.round(errors.reduce((a,b)=>a+b,0)/errors.length):null,samples_per_sec:errors.length});next();},1000);},400);
  }next();
 }
 function instructions(){
  if(stopped)return;
+ if(!session.camera_consent||!camera||session.gaze_status!=='valid'){cameraProblem('Falta una comprobación válida de la mirada.');return;}
  if(C.totalBudgetMs-elapsed()<C.taskBudgetMs+10000){exit('timeout');return;}
  view('<h1>Cómo participar</h1><p>Lee cada texto para comprenderlo. Pulsa «He terminado» cuando acabes. Si aparece un número, indica si es par o impar; el texto volverá tras cuatro segundos. Después responde una pregunta sin consultar el texto.</p><p>Las pantallas avanzan automáticamente si se agota su tiempo. Mantén esta pestaña y el tamaño de la ventana durante la tarea.</p><button id="begin">Empezar las cuatro lecturas</button>');
  document.querySelector('#begin').onclick=run;
@@ -105,11 +119,11 @@ class ReadingTrial {
  constructor(jsPsych){this.jsPsych=jsPsych;}
  trial(display,trial){
   const {item,segmented,interrupted}=trial.condition,t0=performance.now();let ended=false,blocked=false,interruptionStart=null,interruptionEnd=null,interruptResponse=null,interruptRT=null;
-  const samples={n:0,inside:0,post_n:0,post_inside:0,return_ms:null,run:0};let gazeLast=-Infinity;
+  const samples={n:0,inside:0,post_n:0,post_inside:0,return_ms:null,run:0,path:[]};let gazeLast=-Infinity;
   const options=shuffle(item.options.map((text,i)=>({text,index:i})),rng);let rect;
   display.innerHTML=`<p class="trial-progress">Lectura ${trial.order+1} de 4</p><div id="passage" class="reading">${esc(renderText(item,segmented))}</div><div class="buttons"><button id="done" disabled>He terminado</button></div>`;
   const passage=display.querySelector('#passage');rect=passage.getBoundingClientRect();const button=display.querySelector('#done');
-  const gaze=(d,t)=>{if(t-gazeLast<95||blocked)return;gazeLast=t;samples.n++;const inside=d.x>=rect.left&&d.x<=rect.right&&d.y>=rect.top&&d.y<=rect.bottom;if(inside)samples.inside++;if(interruptionEnd!==null){samples.post_n++;if(inside)samples.post_inside++;samples.run=inside?samples.run+1:0;if(samples.run===3&&samples.return_ms===null)samples.return_ms=Math.round(t-interruptionEnd);}};
+  const gaze=(d,t)=>{if(t-gazeLast<95||blocked||samples.path.length>=350)return;const x=Math.round(d.x),y=Math.round(d.y);if(Math.abs(x)>100000||Math.abs(y)>100000)return;gazeLast=t;samples.n++;samples.path.push([Math.round(t-t0),x,y]);const inside=d.x>=rect.left&&d.x<=rect.right&&d.y>=rect.top&&d.y<=rect.bottom;if(inside)samples.inside++;if(interruptionEnd!==null){samples.post_n++;if(inside)samples.post_inside++;samples.run=inside?samples.run+1:0;if(samples.run===3&&samples.return_ms===null)samples.return_ms=Math.round(t-interruptionEnd);}};
   if(camera)gazeHandler=gaze;
   const local=[];const later=(fn,ms)=>{const t=after(fn,ms);local.push(t);return t;};
   later(()=>{button.disabled=false;},interrupted?C.interruptAtMs+C.interruptionMs+1500:C.interruptAtMs+1500);
@@ -122,7 +136,7 @@ class ReadingTrial {
   const finishReading=timedOut=>{
    if(ended||blocked||stopped)return;ended=true;for(const t of local)clearTimeout(t);gazeHandler=null;
    const wall=Math.round(performance.now()-t0),pause=interruptionEnd===null?0:interruptionEnd-interruptionStart;
-   const record={item_id:item.id,order:trial.order,segmented:Number(segmented),interrupted:Number(interrupted),reading_active_ms:Math.round(wall-pause),reading_wall_ms:wall,timed_out:timedOut,interrupt_correct:interruptResponse,interrupt_rt_ms:interruptRT,interruption_actual_ms:Math.round(pause),gaze_n:samples.n,gaze_inside:samples.inside,gaze_return_ms:samples.return_ms,gaze_post_n:samples.post_n,gaze_post_inside:samples.post_inside,aoi:{x:Math.round(rect.x),y:Math.round(rect.y),w:Math.round(rect.width),h:Math.round(rect.height)}};
+   const record={item_id:item.id,order:trial.order,segmented:Number(segmented),interrupted:Number(interrupted),reading_active_ms:Math.round(wall-pause),reading_wall_ms:wall,timed_out:timedOut,interrupt_correct:interruptResponse,interrupt_rt_ms:interruptRT,interruption_actual_ms:Math.round(pause),interruption_start_ms:interruptionStart===null?null:Math.round(interruptionStart-t0),interruption_end_ms:interruptionEnd===null?null:Math.round(interruptionEnd-t0),gaze_n:samples.n,gaze_inside:samples.inside,gaze_return_ms:samples.return_ms,gaze_post_n:samples.post_n,gaze_post_inside:samples.post_inside,gaze_path:samples.path,aoi:{x:Math.round(rect.x),y:Math.round(rect.y),w:Math.round(rect.width),h:Math.round(rect.height)}};
    display.innerHTML=`<p class="trial-progress">Pregunta ${trial.order+1} de 4</p><h2>${esc(item.question)}</h2><div class="buttons">${options.map((o,i)=>`<button data-choice="${i}">${esc(o.text)}</button>`).join('')}</div>`;
    const q0=performance.now();let answered=false;
    const answer=choice=>{if(answered||stopped)return;answered=true;clearTimeout(qTimer);record.response=choice;record.correct=choice===null?null:Number(choice===item.answer);record.question_rt_ms=choice===null?null:Math.round(performance.now()-q0);session.trials.push(record);this.jsPsych.finishTrial(record);};
@@ -135,14 +149,17 @@ class ReadingTrial {
 }
 function run(){
  if(stopped)return;
+ if(!session.camera_consent||!camera||session.gaze_status!=='valid'){cameraProblem('Falta una comprobación válida de la mirada.');return;}
  if(C.totalBudgetMs-elapsed()<C.taskBudgetMs+10000){exit('timeout');return;}
  session.task_start_ms=elapsed();session.quality={hidden:0,resize:0};app.innerHTML='';
  jsPsych=initJsPsych({display_element:app,on_finish:finish,on_close:stopCamera});
  jsPsych.run(schedule(session.list_id,session.bank_id,rng).map((condition,order)=>({type:ReadingTrial,condition,order})));
 }
 function finish(){
- if(stopped)return;stopCamera();clearTimers();session.elapsed_ms=elapsed();
- view(`<h1>Has terminado las lecturas</h1><p>Estudiamos si la puntuación que divide un texto en unidades más cortas ayuda a leer cuando aparecen interrupciones.</p><p>Tu código: <strong>${session.session_id}</strong>. Consérvalo si deseas solicitar la retirada de los datos durante los próximos ${C.retentionMonths} meses.</p><p>${C.mode==='demo'?'Esta demostración no enviará datos.':'Tus respuestas se envían automáticamente. Mantén esta pestaña abierta hasta recibir la confirmación.'}</p><div class="buttons"><button id="send" ${C.mode==='live'?'hidden':''}>${C.mode==='demo'?'Finalizar demostración':'Enviar mis respuestas'}</button><button class="secondary" id="discard">Descartar</button></div><p id="delivery" role="status"></p>`);
+ if(stopped)return;
+ if(!session.camera_consent||session.gaze_status!=='valid'||session.trials.length!==4||session.trials.some(t=>!(t.gaze_n>0))){exit('camera');return;}
+ stopCamera();clearTimers();session.elapsed_ms=elapsed();
+ view(`<h1>Has terminado las lecturas</h1><p>Estudiamos si la puntuación que divide un texto en unidades más cortas ayuda a leer cuando aparecen interrupciones.</p><p>Para solicitar la retirada de tus datos, contacta con el investigador: <a href="mailto:${esc(C.email)}">${esc(C.email)}</a>.</p><p>${C.mode==='demo'?'Esta demostración no enviará datos.':'Tus respuestas se envían automáticamente. Mantén esta pestaña abierta hasta recibir la confirmación.'}</p><div class="buttons"><button id="send" ${C.mode==='live'?'hidden':''}>${C.mode==='demo'?'Finalizar demostración':'Enviar mis respuestas'}</button><button class="secondary" id="discard">Descartar</button></div><p id="delivery" role="status"></p>`);
  document.querySelector('#discard').onclick=()=>exit();document.querySelector('#send').onclick=send;
  if(C.mode==='live')send();
 }
@@ -167,10 +184,10 @@ async function send(){
  const btn=document.querySelector('#send'),status=document.querySelector('#delivery');btn.disabled=true;
  if(C.mode==='demo'){clearTimeout(watchdog);submitted=true;session.trials=[];exitButton.hidden=true;view('<h1>Demostración finalizada</h1><p>No se ha enviado ningún dato. Gracias por probar el estudio.</p>');return;}
  // El envío comienza automáticamente al terminar; ya no se ofrece una retirada
- // local que pudiera prometer borrar un envío en curso. Retirada posterior por código.
+ // local que pudiera prometer borrar un envío en curso. Retirada posterior por contacto.
  clearTimeout(watchdog);exitButton.hidden=true;document.querySelector('#discard').hidden=true;
  status.textContent='Enviando y esperando confirmación de Google Sheets…';
  try{await deliver({...session,mode:'live'});submitted=true;status.textContent='Google Sheets ha confirmado la recepción. Ya puedes cerrar la pestaña.';btn.hidden=true;}
- catch(e){status.textContent='No podemos confirmar la recepción. Puedes reintentar sin duplicar la sesión. Para retirar un envío que haya llegado, escribe al investigador con tu código.';btn.hidden=false;btn.disabled=false;btn.textContent='Reintentar envío';}
+ catch(e){status.textContent='No podemos confirmar la recepción. Puedes reintentar sin duplicar la sesión. Para solicitar la retirada de un envío que haya llegado, escribe al investigador.';btn.hidden=false;btn.disabled=false;btn.textContent='Reintentar envío';}
 }
 landing();

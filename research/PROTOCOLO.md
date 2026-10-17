@@ -1,6 +1,6 @@
 # EME-INT: microestructura textual y lectura interrumpida
 
-Versión 1.0.0 · 13 de septiembre de 2026. Investigador: Aníbal Astobiza, UGR, amastobiza@ugr.es. Documento de diseño, no preregistro ya depositado, aprobación ética ni resultados.
+Versión 1.1.0 · 17 de octubre de 2026. Actualiza la versión 1.0.0 del 13 de septiembre de 2026. Investigador: Aníbal Astobiza, UGR, amastobiza@ugr.es. Documento de diseño, no preregistro ya depositado, aprobación ética ni resultados.
 
 ## 1. Pregunta y alcance de la hipótesis
 
@@ -25,14 +25,14 @@ La decisión punto y coma/punto es deliberada: evita introducir uniones de cláu
 
 ## 3. Procedimiento y tiempo
 
-1. Información, consentimiento afirmativo y cámara opcional.
+1. Información y consentimiento afirmativo, incluido el uso obligatorio de cámara y el registro de coordenadas y tiempos de mirada durante las lecturas.
 2. Edad y dominio del español obligatorios; género, educación y frecuencia de lectura opcionales. No se pregunta nombre, correo, fecha exacta de nacimiento, salud ni localización.
-3. Si hay cámara: permiso, ajuste, nueve puntos con dos clics cada uno y cinco puntos nuevos de validación sin clic. No se usa la validación para entrenar.
+3. Permiso de cámara, detección del rostro, ajuste, nueve puntos con dos clics aceptados cada uno y cinco puntos nuevos de validación sin clic. No se usa la validación para entrenar. Se exige validación válida para comenzar las lecturas; un fallo permite reintentar o salir.
 4. Cuatro lecturas, cada una hasta 22 s de exposición activa. En dos se oculta el texto a los 7 s durante 4 s con clasificación par/impar. La interrupción termina a tiempo fijo aunque se haya respondido. Se registran sus tiempos reales.
 5. Pregunta de tres alternativas, hasta 9 s, sin volver al texto. El botón de terminar lectura se habilita tras 8,5 s activos en ambas condiciones.
-6. Explicación final, código de retirada y confirmación de envío.
+6. Explicación final y envío automático, con confirmación del receptor. No se muestra un código de retirada; se ofrece contacto con el investigador. Se conserva un identificador interno para evitar duplicados.
 
-Los ensayos consumen como máximo 132 s nominales. La página termina sin envío a los 290 s desde su apertura si aún no se ha confirmado el envío. Si no quedan 160 s al entrar a instrucciones o comenzar, finaliza sin iniciar una sesión inviable. Esto cumple un límite de participación a costa de poder descartar sesiones lentas; medir ese sesgo en el piloto. La red puede prolongar la confirmación posterior al último clic, y una pestaña suspendida no garantiza temporizadores de tiempo real.
+Los ensayos consumen como máximo 132 s nominales. La página termina sin envío a los 290 s desde su apertura si aún no ha comenzado el envío automático. Si no quedan 160 s al entrar a instrucciones o comenzar, finaliza sin iniciar una sesión inviable. Esto cumple un límite de participación a costa de poder descartar sesiones lentas; medir ese sesgo en el piloto. La red puede prolongar la confirmación posterior a las tareas, y una pestaña suspendida no garantiza temporizadores de tiempo real.
 
 Objetivo de pilotaje: 40–55 s información/demografía, 45–60 s cámara, 80–132 s tarea y 10 s cierre. Son previsiones, no tiempos empíricos. No presionar para que se omita la lectura del consentimiento. Si demasiadas personas no terminan, reducir textos/tiempos tras el pretest y versionar el protocolo; no anunciar una mediana aún desconocida.
 
@@ -42,9 +42,9 @@ Primario: acierto dentro de los 9 s de respuesta. En el análisis primario, omis
 
 Secundarios: tiempo de respuesta, tiempo activo de lectura y tasa de agotamiento del tiempo. Los tiempos de lectura tienen techo de 22 s y suelo de 8,5 s: no tratarlos como observaciones libres ni asumir que mayor rapidez equivale a mayor comprensión. Analizar censura o restringir interpretaciones a medidas descriptivas.
 
-Exploratorio con WebGazer: retorno al área completa del texto tras interrupción. Se define como latencia hasta la tercera muestra consecutiva dentro de esa área, con muestreo retenido como máximo cercano a 10 Hz. No se denomina fijación, ni regresión ocular sobre palabras, ni tiempo de lectura de una coma. Se guardan conteos y AOI, no coordenadas crudas.
+Exploratorio con WebGazer: retorno al área completa del texto tras interrupción. Se define como latencia hasta la tercera muestra consecutiva dentro de esa área, con muestreo retenido como máximo cercano a 10 Hz. No se denomina fijación, ni regresión ocular sobre palabras, ni tiempo de lectura de una coma. La versión 1.1 conserva conteos, AOI y trayectorias de coordenadas estimadas con tiempos durante la lectura activa. Las interrupciones y preguntas quedan excluidas de la trayectoria. Véase `TRAYECTORIAS.md`. Las sesiones de versión 1.0 conservan únicamente sus resúmenes originales.
 
-Validación operativa: los cinco puntos deben tener al menos cinco muestras y ≥50 % a ≤150 px del objetivo. Son criterios de este piloto, no estándares universales. Guardar error medio, porcentaje, n y tasa. Analizar también sensibilidad a umbrales alternativos fijados antes del análisis. Calibración fallida no elimina conducta. Sin retorno detectado es dato ausente/censurado, no cero. No hay validación final: es una limitación del formato breve.
+Validación operativa: los cinco puntos deben tener al menos cinco muestras y ≥50 % a ≤150 px del objetivo. Son criterios de este piloto, no estándares universales. Guardar error medio, porcentaje, n y tasa. Analizar también sensibilidad a umbrales alternativos fijados antes del análisis. Desde la versión 1.1, una validación fallida impide comenzar las lecturas y una lectura sin muestras impide enviar la sesión. Esta selección puede afectar la composición de la muestra y debe evaluarse en el piloto. La versión 1.0 permitía conservar conducta con calibración fallida. Sin retorno detectado es dato ausente/censurado, no cero. No hay validación final: es una limitación del formato breve.
 
 Exclusiones primarias propuestas: sesión incompleta/no consentida, protocolo distinto, repetición del mismo ID, cambio de pestaña o tamaño durante la tarea. Registrar el flujo y repetir análisis sin excluir las dos últimas categorías. No excluir por errores de comprensión ni de paridad en el análisis principal. La aplicación no transmite sesiones retiradas o agotadas: sus tasas de abandono deberán estimarse en un piloto supervisado, sin inferirlas de la hoja de completados.
 
@@ -70,7 +70,7 @@ Una fase de validación externa puede sustituir los estímulos de control por fr
 
 ## 7. Datos, consentimiento y límites institucionales
 
-Hoja privada de recogida. Sin imágenes, vídeo, audio ni coordenadas de mirada individuales. El código de sesión es seudónimo: no prometer anonimato absoluto. Cámara opcional y permiso separado; la app no solicita micrófono. No se activa WebGazer antes de aceptar.
+Hoja privada de recogida. Sin imágenes, vídeo ni audio. Desde la versión 1.1 se guardan coordenadas estimadas y tiempos de mirada durante las lecturas, además de los resúmenes. El identificador interno de sesión es seudónimo: no prometer anonimato absoluto. La cámara es obligatoria para participar, con aceptación explícita separada; la app no solicita micrófono. No se activa WebGazer antes de aceptar. El consentimiento actualizado es EME-CI-1.1.0.
 
 Conservación acordada: 12 meses. El backend incluye purga por fecha y creación de un disparador diario; ambos requieren instalación por el titular. La eliminación de filas no garantiza purga inmediata del historial/versiones del proveedor. Gestionar también exportaciones, copias y políticas del servicio.
 

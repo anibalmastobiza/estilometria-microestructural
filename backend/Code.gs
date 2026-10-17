@@ -24,13 +24,15 @@ function enum_(v,values){assert_(values.indexOf(v)>=0,'Valor no permitido');retu
 function num_(v,min,max,nullable){if(nullable&&v===null)return null;assert_(typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max,'Número fuera de rango');return v;}
 function integer_(v,min,max){num_(v,min,max,false);assert_(Number.isInteger(v),'Entero requerido');return v;}
 function validate_(p){
- assert_(p&&JSON.stringify(p).length<30000,'Solicitud inválida o demasiado grande');
+ assert_(p&&JSON.stringify(p).length<=50000,'Solicitud inválida o demasiado grande');
  assert_(p.mode==='live'&&p.consent_accepted===true,'Sin consentimiento');
  assert_(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(p.session_id),'Identificador inválido');
- assert_(p.protocol_version==='EME-INT-1.0.0'&&p.consent_version==='EME-CI-1.0.0','Versión incorrecta');
+ const trajectories=p.protocol_version==='EME-INT-1.1.0';
+ assert_((trajectories&&p.consent_version==='EME-CI-1.1.0')||(p.protocol_version==='EME-INT-1.0.0'&&p.consent_version==='EME-CI-1.0.0'),'Versión incorrecta');
  integer_(p.list_id,0,3);integer_(p.bank_id,0,1);num_(p.elapsed_ms,1000,300000);
  assert_(typeof p.camera_consent==='boolean','Falta consentimiento de cámara');
  enum_(p.gaze_status,['valid','invalid','declined','failed']);
+ if(trajectories)assert_(p.camera_consent===true&&p.gaze_status==='valid','Se requiere cámara consentida y mirada validada');
  if(!p.camera_consent)assert_(p.gaze_status==='declined','Cámara no consentida');
  assert_(Array.isArray(p.trials)&&p.trials.length===4,'Se requieren cuatro ensayos');
  const answers=[0,1,2,1,0,2,1,0],seen={};
@@ -49,6 +51,23 @@ function validate_(p){
   ['gaze_n','gaze_inside','gaze_post_n','gaze_post_inside'].forEach(k=>r[k]=integer_(t[k],0,10000));
   assert_(r.gaze_inside<=r.gaze_n&&r.gaze_post_inside<=r.gaze_post_n,'Conteos de mirada inválidos');
   if(!p.camera_consent)assert_(r.gaze_n===0&&r.gaze_return_ms===null,'Mirada sin consentimiento');
+  if(trajectories){
+   const start=t.interruption_start_ms,end=t.interruption_end_ms;
+   if(!t.interrupted)assert_(start===null&&end===null&&r.interruption_actual_ms===0,'Interrupción inesperada');
+   else if(start===null||end===null)assert_(start===null&&end===null&&r.interruption_actual_ms===0,'Interrupción incompleta');
+   else{integer_(start,0,r.reading_wall_ms);integer_(end,0,r.reading_wall_ms);assert_(start<end&&Math.abs(end-start-r.interruption_actual_ms)<=1,'Intervalo de interrupción inválido');}
+   r.interruption_start_ms=start;r.interruption_end_ms=end;
+   assert_(Array.isArray(t.gaze_path)&&t.gaze_path.length>0&&t.gaze_path.length<=350&&t.gaze_path.length===r.gaze_n,'Trayectoria de mirada inválida');
+   let previous=-1;
+   r.gaze_path=t.gaze_path.map(point=>{
+    assert_(Array.isArray(point)&&point.length===3,'Muestra de mirada inválida');
+    const time=integer_(point[0],0,r.reading_wall_ms),x=integer_(point[1],-100000,100000),y=integer_(point[2],-100000,100000);
+    assert_(time>previous,'Tiempos de mirada no crecientes');previous=time;
+    // Una muestra anterior al inicio puede compartir su milisegundo por redondeo.
+    assert_(start===null||time<=start||time>=end,'Muestra durante la interrupción');
+    return [time,x,y];
+   });
+  }
   r.aoi={};['x','y','w','h'].forEach(k=>r.aoi[k]=num_(t.aoi[k],0,20000));return r;
  });
  assert_(Array.isArray(p.validation)&&p.validation.length<=5,'Validación inválida');
@@ -57,10 +76,11 @@ function validate_(p){
  assert_(p.gaze_status!=='valid'||(points.length===5&&points.every(v=>v.n>=5&&v.in_roi>=.5)),'Validación insuficiente');
  const viewport={width:integer_(p.viewport.width,0,20000),height:integer_(p.viewport.height,0,20000),dpr:num_(p.viewport.dpr,.1,20)};
  const quality={hidden:integer_(p.quality.hidden,0,10000),resize:integer_(p.quality.resize,0,10000),consent_elapsed_ms:num_(p.consent_elapsed_ms,0,300000),task_start_ms:num_(p.task_start_ms,0,300000)};
+ const trialsJson=JSON.stringify(trials);assert_(trialsJson.length<=48000,'Los ensayos exceden el tamaño permitido');
  return [new Date().toISOString(),p.session_id,p.protocol_version,p.consent_version,
   enum_(p.age_band,['18-29','30-44','45-59','60+']),enum_(p.spanish_level,['native','advanced']),
   enum_(p.education,['','secondary','vocational','university']),enum_(p.reading_frequency,['','rare','weekly','daily']),enum_(p.gender,['','woman','man','other']),
-  p.list_id,p.bank_id,p.elapsed_ms,p.gaze_status,JSON.stringify({camera_consent:p.camera_consent,points}),JSON.stringify(viewport),JSON.stringify(quality),JSON.stringify(trials)];
+  p.list_id,p.bank_id,p.elapsed_ms,p.gaze_status,JSON.stringify({camera_consent:p.camera_consent,points}),JSON.stringify(viewport),JSON.stringify(quality),trialsJson];
 }
 function saveSession(p){
  const props=PropertiesService.getScriptProperties();
