@@ -15,9 +15,12 @@ test('Reintento idempotente: una sola fila por sesión',()=>{
  const modern=trajectoryPacket();modern.session_id='10000000-0000-4000-8000-000000000000';
  assert.equal(ctx.saveSession(modern).ok,true);assert.equal(ctx.saveSession(modern).duplicate,true);assert.equal(rows.length,3);
  assert.deepEqual(JSON.parse(rows[2][16]).map(t=>t.gaze_path),modern.trials.map(t=>t.gaze_path));
+ const simplified=trajectoryPacket('EME-INT-1.2.0');simplified.session_id='20000000-0000-4000-8000-000000000000';simplified.gaze_status='invalid';simplified.validation[0].in_roi=.2;
+ assert.equal(ctx.saveSession(simplified).ok,true);assert.equal(ctx.saveSession(simplified).duplicate,true);assert.equal(rows.length,4);
+ assert.equal(rows[3][12],'invalid');assert.deepEqual(JSON.parse(rows[3][16]).map(t=>t.gaze_path),simplified.trials.map(t=>t.gaze_path));
 });
-function trajectoryPacket(){
- const p=packet();Object.assign(p,{protocol_version:'EME-INT-1.1.0',consent_version:'EME-CI-1.1.0',camera_consent:true,gaze_status:'valid'});
+function trajectoryPacket(protocol='EME-INT-1.1.0'){
+ const p=packet();Object.assign(p,{protocol_version:protocol,consent_version:'EME-CI-1.1.0',camera_consent:true,gaze_status:'valid'});
  p.validation=[[300,240],[900,240],[600,400],[300,560],[900,560]].map(([x,y])=>({x,y,n:8,in_roi:.75,mean_error_px:50,samples_per_sec:8}));
  for(const t of p.trials)Object.assign(t,{interruption_start_ms:t.interrupted?7000:null,interruption_end_ms:t.interrupted?11000:null,gaze_path:[[0,300,200],[100,350,250],[11900,1300,-50]],gaze_n:3,gaze_inside:2,gaze_post_n:t.interrupted?1:0,gaze_post_inside:0});
  return p;
@@ -37,10 +40,50 @@ test('Protocolo histórico conserva compatibilidad y omite las trayectorias nuev
  const trials=JSON.parse(ctx.validate_(p)[16]);assert.ok(trials.every(t=>!('gaze_path' in t)&&!('interruption_start_ms' in t)&&!('interruption_end_ms' in t)));
 });
 test('Protocolo 1.1 exige cámara consentida, validación completa y versiones compatibles',()=>{
- for(const mutate of [p=>p.camera_consent=false,p=>p.gaze_status='invalid',p=>p.gaze_status='failed',p=>p.validation.pop(),p=>p.validation[0].n=4,p=>p.validation[0].in_roi=.49,p=>p.consent_version='EME-CI-1.0.0',p=>p.protocol_version='EME-INT-1.2.0']){
+ for(const mutate of [p=>p.camera_consent=false,p=>p.gaze_status='invalid',p=>p.gaze_status='failed',p=>p.validation.pop(),p=>p.validation[0].n=4,p=>p.validation[0].in_roi=.49,p=>p.consent_version='EME-CI-1.0.0',p=>p.protocol_version='EME-INT-1.3.0']){
   const p=trajectoryPacket();mutate(p);assert.throws(()=>ctx.validate_(p));
  }
  const p=packet();p.consent_version='EME-CI-1.1.0';assert.throws(()=>ctx.validate_(p));
+});
+test('Protocolo 1.2 conserva señal precisa o imprecisa, su etiqueta y las trayectorias',()=>{
+ for(const status of ['valid','invalid']){
+  const p=trajectoryPacket('EME-INT-1.2.0');p.gaze_status=status;if(status==='invalid')p.validation[0].in_roi=.2;
+  const before=JSON.stringify(p),row=ctx.validate_(p);
+  assert.equal(row.length,17);assert.equal(row[2],'EME-INT-1.2.0');assert.equal(row[3],'EME-CI-1.1.0');assert.equal(row[12],status);
+  assert.deepEqual(JSON.parse(row[13]),{camera_consent:true,points:p.validation});
+  assert.deepEqual(JSON.parse(row[16]).map(t=>t.gaze_path),p.trials.map(t=>t.gaze_path));
+  assert.equal(JSON.stringify(p),before);
+ }
+});
+test('Protocolo 1.2 rechaza falsa precisión y conserva una marca invalid conservadora',()=>{
+ const p=trajectoryPacket('EME-INT-1.2.0');p.validation[0].in_roi=.49;assert.throws(()=>ctx.validate_(p),/Validación insuficiente/);
+ p.gaze_status='invalid';assert.equal(ctx.validate_(p)[12],'invalid');
+ p.validation[0].in_roi=.5;assert.equal(ctx.validate_(p)[12],'invalid');
+ p.gaze_status='valid';assert.equal(ctx.validate_(p)[12],'valid');
+});
+test('Protocolo 1.2 conserva errores grandes de una mirada imprecisa sin bloquear el envío',()=>{
+ const p=trajectoryPacket('EME-INT-1.2.0');p.gaze_status='invalid';
+ for(const v of p.validation){v.in_roi=0;v.mean_error_px=Math.round(Math.hypot(50000-v.x,50000-v.y));}
+ for(const t of p.trials){t.gaze_path=t.gaze_path.map(([time])=>[time,50000,50000]);t.gaze_inside=0;}
+ const row=ctx.validate_(p);assert.equal(row[12],'invalid');assert.ok(p.validation.every(v=>v.mean_error_px>30000));
+ assert.deepEqual(JSON.parse(row[13]).points,p.validation);assert.deepEqual(JSON.parse(row[16]).map(t=>t.gaze_path),p.trials.map(t=>t.gaze_path));
+ p.validation[0].mean_error_px=200000;assert.doesNotThrow(()=>ctx.validate_(p));
+ p.validation[0].mean_error_px=200001;assert.throws(()=>ctx.validate_(p),/Número fuera de rango/);
+ for(const protocol of ['EME-INT-1.0.0','EME-INT-1.1.0']){
+  const old=trajectoryPacket(protocol);if(protocol==='EME-INT-1.0.0')old.consent_version='EME-CI-1.0.0';
+  old.validation[0].mean_error_px=30001;assert.throws(()=>ctx.validate_(old),/Número fuera de rango/);
+ }
+});
+test('Protocolo 1.2 exige cámara, consentimiento compatible y señal en los cinco puntos aun si es imprecisa',()=>{
+ for(const status of ['valid','invalid'])for(const mutate of [p=>p.camera_consent=false,p=>delete p.camera_consent,p=>p.gaze_status='failed',p=>p.gaze_status='declined',p=>p.validation=[],p=>p.validation.pop(),p=>p.validation[0].n=4,p=>p.consent_version='EME-CI-1.0.0',p=>p.consent_version='EME-CI-1.2.0']){
+  const p=trajectoryPacket('EME-INT-1.2.0');p.gaze_status=status;mutate(p);assert.throws(()=>ctx.validate_(p));
+ }
+ const p=trajectoryPacket('EME-INT-1.2.0');p.gaze_status='invalid';p.validation.forEach(v=>{v.n=5;v.in_roi=0;});assert.equal(ctx.validate_(p)[12],'invalid');
+});
+test('Protocolo 1.2 mantiene trayectorias no vacías, conteos, enteros, orden y huecos de interrupción',()=>{
+ for(const status of ['valid','invalid'])for(const mutate of [t=>delete t.gaze_path,t=>{t.gaze_path=[];t.gaze_n=0;t.gaze_inside=0;},t=>t.gaze_n=2,t=>t.gaze_path[0]=[0,1],t=>t.gaze_path[0][1]=.5,t=>t.gaze_path[0][1]=100001,t=>t.gaze_path[1][0]=0,t=>t.gaze_path[1][0]=7001]){
+  const p=trajectoryPacket('EME-INT-1.2.0');p.gaze_status=status;mutate(p.trials.find(t=>t.interrupted));assert.throws(()=>ctx.validate_(p));
+ }
 });
 test('Trayectorias rechazan muestras mal formadas, no finitas, fraccionarias o fuera de rango',()=>{
  const invalid=[[0,1],[0,1,2,3],null,'0,1,2',[0,'1',2],[0,NaN,2],[0,1,Infinity],[0,1.5,2],[.5,1,2],[-1,1,2],[0,-100001,2],[0,1,100001],[12001,1,2]];
@@ -66,9 +109,11 @@ test('Offsets de interrupción deben ser enteros, coherentes y estar dentro de l
  const plain=p.trials.find(t=>!t.interrupted);plain.interruption_start_ms=0;plain.interruption_end_ms=4000;assert.throws(()=>ctx.validate_(p));
 });
 test('Admite 350 muestras por lectura y limita el tamaño total y de la celda',()=>{
- const p=trajectoryPacket();
+ for(const protocol of ['EME-INT-1.1.0','EME-INT-1.2.0']){
+ const p=trajectoryPacket(protocol);if(protocol==='EME-INT-1.2.0')p.gaze_status='invalid';
  for(const t of p.trials){t.reading_wall_ms=t.interrupted?39000:35000;t.reading_active_ms=35000;t.gaze_path=Array.from({length:350},(_,i)=>[i*100+(t.interrupted&&i>=70?4000:0),-100000,100000]);t.gaze_n=350;}
  const row=ctx.validate_(p);assert.ok(JSON.stringify(p).length>30000);assert.ok(row[16].length<=48000);assert.ok(JSON.parse(row[16]).every(t=>t.gaze_path.length===350));
  p.padding='';p.padding='x'.repeat(50000-JSON.stringify(p).length);assert.equal(JSON.stringify(p).length,50000);assert.doesNotThrow(()=>ctx.validate_(p));
  p.padding+='x';assert.throws(()=>ctx.validate_(p),/demasiado grande/);
+ }
 });

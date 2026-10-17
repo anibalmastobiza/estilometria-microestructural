@@ -4,9 +4,11 @@ suppressPackageStartupMessages(library(brms))
 args <- commandArgs(trailingOnly=TRUE)
 stopifnot(length(args)==2)
 d <- read.csv(args[1], na.strings=c('', 'null', 'None'), stringsAsFactors=FALSE)
-# Analizar cada versión por separado: la 1.1 exige cámara y validación válida.
+# Analizar cada versión por separado: cambian los criterios de participación.
+# La 1.2 conserva conducta con señal suficiente aunque gaze_status sea invalid.
+# Este modelo analiza comprensión; no interpreta precisión de las trayectorias.
 stopifnot(nrow(d)>0, length(unique(d$protocol_version))==1L,
-          all(d$protocol_version %in% c('EME-INT-1.0.0','EME-INT-1.1.0')))
+          all(d$protocol_version %in% c('EME-INT-1.0.0','EME-INT-1.1.0','EME-INT-1.2.0')))
 out <- args[2];dir.create(out,recursive=TRUE,showWarnings=FALSE)
 # Reglas propuestas: congelar antes de la recogida confirmatoria.
 d <- d[d$hidden==0 & d$resize==0, ]

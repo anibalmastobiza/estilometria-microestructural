@@ -5,7 +5,7 @@ export const CONFIG = Object.freeze({
   institution: 'Universidad de Granada (UGR)',
   email: 'amastobiza@ugr.es',
   retentionMonths: 12,
-  protocol: 'EME-INT-1.1.0',
+  protocol: 'EME-INT-1.2.0',
   consent: 'EME-CI-1.1.0',
   totalBudgetMs: 290000,
   taskBudgetMs: 150000,

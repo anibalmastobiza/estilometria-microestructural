@@ -27,12 +27,13 @@ function validate_(p){
  assert_(p&&JSON.stringify(p).length<=50000,'Solicitud inválida o demasiado grande');
  assert_(p.mode==='live'&&p.consent_accepted===true,'Sin consentimiento');
  assert_(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(p.session_id),'Identificador inválido');
- const trajectories=p.protocol_version==='EME-INT-1.1.0';
+ const simplified=p.protocol_version==='EME-INT-1.2.0';
+ const trajectories=simplified||p.protocol_version==='EME-INT-1.1.0';
  assert_((trajectories&&p.consent_version==='EME-CI-1.1.0')||(p.protocol_version==='EME-INT-1.0.0'&&p.consent_version==='EME-CI-1.0.0'),'Versión incorrecta');
  integer_(p.list_id,0,3);integer_(p.bank_id,0,1);num_(p.elapsed_ms,1000,300000);
  assert_(typeof p.camera_consent==='boolean','Falta consentimiento de cámara');
  enum_(p.gaze_status,['valid','invalid','declined','failed']);
- if(trajectories)assert_(p.camera_consent===true&&p.gaze_status==='valid','Se requiere cámara consentida y mirada validada');
+ if(trajectories)assert_(p.camera_consent===true&&(p.gaze_status==='valid'||simplified&&p.gaze_status==='invalid'),'Se requiere cámara consentida y comprobación de mirada');
  if(!p.camera_consent)assert_(p.gaze_status==='declined','Cámara no consentida');
  assert_(Array.isArray(p.trials)&&p.trials.length===4,'Se requieren cuatro ensayos');
  const answers=[0,1,2,1,0,2,1,0],seen={};
@@ -72,7 +73,9 @@ function validate_(p){
  });
  assert_(Array.isArray(p.validation)&&p.validation.length<=5,'Validación inválida');
  if(!p.camera_consent)assert_(p.validation.length===0,'Validación sin consentimiento');
- const points=p.validation.map(v=>({x:num_(v.x,0,20000),y:num_(v.y,0,20000),n:integer_(v.n,0,1000),in_roi:num_(v.in_roi,0,1),mean_error_px:num_(v.mean_error_px,0,30000,true),samples_per_sec:num_(v.samples_per_sec,0,1000)}));
+ const points=p.validation.map(v=>({x:num_(v.x,0,20000),y:num_(v.y,0,20000),n:integer_(v.n,0,1000),in_roi:num_(v.in_roi,0,1),mean_error_px:num_(v.mean_error_px,0,simplified?200000:30000,true),samples_per_sec:num_(v.samples_per_sec,0,1000)}));
+ if(simplified)assert_(points.length===5&&points.every(v=>v.n>=5),'Se requieren cinco puntos con señal de mirada suficiente');
+ // Se verifica la precisión declarada; una marca invalid conservadora no se promueve.
  assert_(p.gaze_status!=='valid'||(points.length===5&&points.every(v=>v.n>=5&&v.in_roi>=.5)),'Validación insuficiente');
  const viewport={width:integer_(p.viewport.width,0,20000),height:integer_(p.viewport.height,0,20000),dpr:num_(p.viewport.dpr,.1,20)};
  const quality={hidden:integer_(p.quality.hidden,0,10000),resize:integer_(p.quality.resize,0,10000),consent_elapsed_ms:num_(p.consent_elapsed_ms,0,300000),task_start_ms:num_(p.task_start_ms,0,300000)};

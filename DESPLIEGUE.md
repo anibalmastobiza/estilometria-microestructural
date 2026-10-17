@@ -10,7 +10,7 @@ La hoja se ha creado en la cuenta Google conectada. Antes de recoger datos insti
 
 ## 2. Receptor de Google Apps Script
 
-1. Desde la hoja: **Extensiones → Apps Script**.
+1. Desde la hoja: **Extensiones**, **Apps Script**.
 2. Copiar `backend/Code.gs` al archivo `Code.gs`.
 3. Crear archivo HTML llamado **Bridge** y copiar `backend/Bridge.html`.
 4. En Configuración del proyecto, mostrar `appsscript.json` y copiar el manifiesto suministrado. El alcance `spreadsheets` permite acceder a hojas como titular; Google solicitará autorización. No se guarda ningún token en GitHub.
@@ -22,7 +22,7 @@ La hoja se ha creado en la cuenta Google conectada. Antes de recoger datos insti
 | ALLOWED_ORIGIN | https://anibalmastobiza.github.io |
 | COLLECTION_OPEN | false |
 
-6. **Implementar → Nueva implementación → Aplicación web**. Ejecutar como titular del script; acceso «Cualquier persona» si la cuenta lo permite. Esto hace público el receptor de escritura, no la hoja. El titular completa personalmente cualquier autorización o aviso de Google.
+6. **Implementar**, **Nueva implementación**, **Aplicación web**. Ejecutar como titular del script; acceso «Cualquier persona» si la cuenta lo permite. Esto hace público el receptor de escritura, no la hoja. El titular completa personalmente cualquier autorización o aviso de Google.
 7. Copiar la URL terminada en `/exec` a `endpoint` en `docs/config.js`. No utilizar la URL `/dev`.
 8. Mantener `mode:'demo'` para comprobar el sitio. Cuando el receptor y la información de consentimiento estén comprobados, poner `COLLECTION_OPEN=true` y `mode:'live'` para una prueba supervisada de punta a punta.
 
@@ -34,7 +34,7 @@ El receptor carga en un iframe y utiliza `google.script.run`; devuelve confirmac
 
 Repositorio: `anibalmastobiza/estilometria-microestructural`.
 
-En **Settings → Pages → Build and deployment**, elegir **Deploy from a branch**, rama `main`, carpeta `/docs`, y guardar. La URL esperada es:
+En **Settings**, **Pages**, **Build and deployment**, elegir **Deploy from a branch**, rama `main`, carpeta `/docs`, y guardar. La URL esperada es:
 
 https://anibalmastobiza.github.io/estilometria-microestructural/
 
@@ -42,7 +42,7 @@ Es una URL esperada hasta que se verifique su respuesta y contenido. El sitio no
 
 ## 4. Comprobación real antes de reclutar
 
-Con una persona que consienta el piloto, completar una sesión y verificar: aparece exactamente una fila; `trials_json` contiene cuatro ítems y cuatro celdas experimentales; la cámara se apaga; el mensaje de recepción llega solo al guardar. Reintentar el mismo envío no debe crear otra fila. Una sesión retirada, una demostración o una sesión sin consentimiento no debe aparecer. Comprobar permiso de cámara denegado, mala calibración, salida y ventana pequeña.
+Con una persona que consienta el piloto, completar una sesión y verificar: aparece exactamente una fila; `trials_json` contiene cuatro ítems y cuatro celdas experimentales; la cámara se apaga; el mensaje de recepción llega solo al guardar. Reintentar el mismo envío no debe crear otra fila. Una sesión retirada, una demostración o una sesión sin consentimiento no debe aparecer. Comprobar permiso de cámara denegado, falta de señal, salida y ventana pequeña. En la versión 1.2, comprobar también que la calibración avanza sin clics, que la validación se realiza una sola vez y que una señal suficiente pero imprecisa permite continuar conservando `gaze_status=invalid` y sus errores de validación en la hoja.
 
 El ensayo de transmisión debe identificarse y separarse del análisis, con autorización para eliminar su fila. No afirmar que la conexión ha sido probada si solo han pasado pruebas locales del receptor.
 
@@ -52,9 +52,9 @@ Ejecutar desde el editor `installRetentionTrigger_` para instalar una purga diar
 
 No se entrega un código de retirada al participante. Las solicitudes llegan por contacto con el investigador y requieren identificar con certeza la sesión antes de eliminarla y gestionar sus exportaciones. `session_id` permanece como identificador interno y control de duplicados. No existe un endpoint público de lectura o borrado. Cerrar la recogida con `COLLECTION_OPEN=false`.
 
-## Actualización a la versión 1.1
+## Actualización a la versión 1.2
 
-Actualizar primero `Code.gs` en el proyecto Apps Script existente y publicar una nueva versión de su implementación conservando la URL `/exec`. El receptor acepta sesiones 1.0 ya abiertas y sesiones 1.1 con cámara consentida, validación válida y trayectoria. Después publicar `docs/app.js` y `docs/config.js`, con protocolo EME-INT-1.1.0 y consentimiento EME-CI-1.1.0. No cambiar las 17 cabeceras de `Sesiones`: `gaze_path` y los tiempos de interrupción se guardan dentro de `trials_json`, en la columna Q. No activar el formulario 1.1 antes de actualizar el receptor, pues el receptor anterior rechaza la nueva versión.
+Actualizar primero `Code.gs` en el proyecto Apps Script existente y publicar una nueva versión de su implementación conservando la URL `/exec`. El receptor conserva compatibilidad con sesiones 1.0 y 1.1 ya abiertas. Para la versión 1.2 admite cámara consentida, señal suficiente, trayectoria y un estado de mirada `valid` o `invalid` coherente con los resultados de la comprobación. Una precisión insuficiente conserva `invalid`; no debe convertirse en `valid` para aceptar el envío. Después publicar `docs/app.js` y `docs/config.js`, con protocolo EME-INT-1.2.0. El consentimiento permanece en EME-CI-1.1.0 porque se conservan los tipos de datos recogidos. No cambiar las 17 cabeceras de `Sesiones`: `gaze_path` y los tiempos de interrupción siguen dentro de `trials_json`, en la columna Q. No activar el formulario 1.2 antes de actualizar el receptor, pues el receptor anterior rechaza la nueva versión.
 
 ## 6. Exportar y analizar
 
@@ -65,6 +65,6 @@ python3 scripts/export_sessions.py data/Sesiones.csv data/ensayos.csv
 Rscript scripts/analyze.R data/ensayos.csv data/analisis
 ```
 
-No subir `data/` a GitHub. Las reglas de exclusión y modelos están en el protocolo; el script no sustituye su preregistro.
+No subir `data/` a GitHub. `scripts/analyze.R` acepta las versiones 1.0, 1.1 y 1.2, con una sola versión por ejecución. Su modelo analiza comprensión y no establece precisión de las trayectorias. Conservar `gaze_status` y separar la calidad de mirada al analizar coordenadas; las trayectorias `invalid` no deben interpretarse como precisas o fiables. Las reglas de exclusión y modelos están en el protocolo; el script no sustituye su preregistro.
 
 Fuentes técnicas: [Apps Script web apps](https://developers.google.com/apps-script/guides/web), [comunicación cliente-servidor](https://developers.google.com/apps-script/guides/html/communication), [GitHub Pages](https://docs.github.com/en/pages/getting-started-with-github-pages/configuring-a-publishing-source-for-your-github-pages-site).

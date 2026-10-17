@@ -2,7 +2,7 @@ import {CONFIG as C} from './config.js';
 import {schedule,renderText,mulberry32,shuffle} from './stimuli.js';
 const app=document.querySelector('#app'),exitButton=document.querySelector('#withdraw');
 const start=performance.now();
-let stopped=false,submitted=false,watchdog,jsPsych,gazeHandler=null,camera=false,lastEyeFeatures=null;
+let stopped=false,submitted=false,watchdog,jsPsych,gazeHandler=null,camera=false;
 const timers=new Set();
 const after=(fn,ms)=>{const t=setTimeout(()=>{timers.delete(t);if(!stopped)fn();},ms);timers.add(t);return t;};
 const clearTimers=()=>{for(const t of timers)clearTimeout(t);timers.clear();};
@@ -14,7 +14,7 @@ const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'
 const view=html=>{app.innerHTML=html;window.scrollTo(0,0);};
 const elapsed=()=>Math.round(performance.now()-start);
 function stopCamera(){
- gazeHandler=null;camera=false;lastEyeFeatures=null;
+ gazeHandler=null;camera=false;
  document.querySelectorAll('video').forEach(v=>v.srcObject?.getTracks().forEach(t=>t.stop()));
  if(window.webgazer){
   try{window.webgazer.clearGazeListener();window.webgazer.end();}catch{}
@@ -27,7 +27,7 @@ function exit(reason='withdrawn'){
  if(stopped||submitted)return;stopped=true;clearTimers();clearTimeout(watchdog);stopCamera();
  document.querySelectorAll('.overlay,.dot').forEach(e=>e.remove());exitButton.hidden=true;
  session.trials=[];session.validation=[];
- view(`<h1>${reason==='timeout'?'Tiempo finalizado':reason==='camera'?'No se pudo registrar la mirada':'Has salido del estudio'}</h1>${reason==='camera'?'<p>El estudio requiere la cámara activa y datos de mirada en cada lectura. Puedes recargar para intentarlo de nuevo.</p>':''}<p>No se han enviado tus respuestas. La cámara está apagada y los datos de esta sesión se han descartado.</p><p>Puedes cerrar esta pestaña.</p>`);
+ view(`<h1>${reason==='timeout'?'Tiempo finalizado':reason==='camera'?'No se pudo registrar la mirada':'Has salido del estudio'}</h1>${reason==='camera'?'<p>No se han recibido suficientes datos de mirada. El estudio necesita una cámara activa y una señal de seguimiento. Puedes probar desde otro navegador.</p>':''}<p>No se han enviado tus respuestas. La cámara está apagada y los datos de esta sesión se han descartado.</p><p>Puedes cerrar esta pestaña.</p>`);
 }
 exitButton.onclick=()=>exit();
 window.addEventListener('pagehide',()=>{stopCamera();});
@@ -61,15 +61,15 @@ function demographics(){
  ${select('gender','Género',[['woman','Mujer'],['man','Hombre'],['other','Otra identidad']])}</div><button>Continuar</button></form>`);
  document.querySelector('#demo').onsubmit=e=>{e.preventDefault();Object.assign(session,Object.fromEntries(new FormData(e.target)));cameraIntro();};
 }
-function cameraIntro(){view('<h1>Preparar la cámara</h1><p>Busca buena iluminación. Mantén la cabeza fija, sin moverla ni girarla, durante la calibración y la comprobación. Dirige la mirada al centro de cada punto, tanto cuando hagas clic como cuando solo tengas que mirarlo. Para seguir los puntos, mueve únicamente los ojos. La cámara es obligatoria para participar.</p><button id="camera">Activar cámara</button>');document.querySelector('#camera').onclick=initCamera;}
+function cameraIntro(){view('<h1>Preparar la cámara</h1><p>Busca buena iluminación. Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto y síguelo moviendo únicamente los ojos. Los puntos avanzan solos: no tienes que hacer clic. Después, mantén también la cabeza fija durante las lecturas. La cámara es obligatoria para participar.</p><button id="camera">Activar cámara</button>');document.querySelector('#camera').onclick=initCamera;}
 function cameraProblem(message,retry=true){
  if(stopped)return;stopCamera();
- view(`<h1>Comprueba la cámara</h1><p>${message}</p><p>Para continuar necesitas activar la cámara y superar la comprobación de la mirada. También puedes salir del estudio.</p><button id="retry-camera">${retry?'Reintentar cámara y calibración':'Recargar para reintentar'}</button>`);
+ view(`<h1>Comprueba la cámara</h1><p>${message}</p><p>Para continuar necesitas activar la cámara y recibir señal de mirada. También puedes salir del estudio.</p><button id="retry-camera">${retry?'Reintentar cámara y calibración':'Recargar para reintentar'}</button>`);
  document.querySelector('#retry-camera').onclick=retry?initCamera:()=>window.location.reload();
 }
 async function initCamera(){
  if(stopped)return;if(!session.camera_consent){exit('camera');return;}
- session.validation=[];session.gaze_status='failed';lastEyeFeatures=null;
+ session.validation=[];session.gaze_status='failed';
  view('<h1>Conectando la cámara…</h1><p>Acepta el permiso de cámara del navegador para participar. No se solicitará micrófono.</p>');
  let abandoned=false,initializing=true;const fail=(error)=>{if(abandoned||stopped)return;abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';
  const message=error?.name==='NotAllowedError'?'El navegador no ha permitido la cámara. Revisa el permiso de cámara de esta página.':error?.name==='NotFoundError'?'No se ha encontrado una cámara conectada.':'No se pudo iniciar la cámara. Comprueba los permisos y que otra aplicación no la esté usando.';
@@ -80,7 +80,7 @@ async function initCamera(){
   if(!window.webgazer)await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=C.webgazerURL;s.onload=resolve;s.onerror=reject;document.head.append(s);});
   if(abandoned||stopped)return;
   window.saveDataAcrossSessions=false;await window.webgazer.clearData();
-  window.webgazer.setGazeListener((data)=>{if(data?.eyeFeatures)lastEyeFeatures=data.eyeFeatures;if(Number.isFinite(data?.x)&&Number.isFinite(data?.y)&&gazeHandler)gazeHandler(data,performance.now());});
+  window.webgazer.setGazeListener((data)=>{if(Number.isFinite(data?.x)&&Number.isFinite(data?.y)&&gazeHandler)gazeHandler(data,performance.now());});
   await window.webgazer.begin();initializing=false;
   if(abandoned||stopped){stopCamera();return;}
   window.webgazer.removeMouseEventListeners();
@@ -89,59 +89,68 @@ async function initCamera(){
   const video=document.querySelector('#webgazerVideoFeed');if(video){video.muted=true;await video.play();}
   if(abandoned||stopped){stopCamera();return;}
   document.querySelectorAll('video').forEach(v=>v.srcObject?.getVideoTracks().forEach(t=>t.addEventListener('ended',()=>exit('camera'),{once:true})));
-  view('<h1>Ajusta tu posición</h1><p>Comprueba que se ve tu rostro y mantén la cámara activa durante todo el estudio.</p><p id="face-status" role="status">Esperando a que se detecte tu rostro. Mira hacia la pantalla.</p><button id="ready" disabled>Calibrar: mirar y pulsar puntos</button>');
+  view('<h1>Ajusta tu posición</h1><p>Comprueba que se ve tu rostro y mantén la cámara activa durante todo el estudio.</p><p id="face-status" role="status">Esperando a que se detecte tu rostro. Mira hacia la pantalla.</p><button id="ready" disabled>Comenzar: seguir los puntos con la mirada</button>');
   const ready=document.querySelector('#ready');ready.onclick=calibrate;
   const checkFace=()=>{if(abandoned||stopped)return;if(faceReady()){clearTimeout(timeout);ready.disabled=false;document.querySelector('#face-status').textContent='Rostro detectado. Ya puedes comenzar la calibración.';}else after(checkFace,100);};checkFace();
  }catch(error){initializing=false;fail(error);}
 }
 function faceReady(){return Boolean(camera&&window.webgazer.isReady()&&window.webgazer.getTracker().getPositions()?.length);}
 function calibrate(){
- if(stopped)return;if(!camera||!session.camera_consent){cameraProblem('La cámara debe estar activa para calibrar.');return;}
- if(!faceReady()){cameraProblem('No se detecta tu rostro. Mira hacia la pantalla y revisa la iluminación.');return;}
+ if(stopped)return;if(!camera||!session.camera_consent||!faceReady()){exit('camera');return;}
  session.validation=[];session.gaze_status='failed';
  // Mantener el vídeo renderizado evita depender de la reproducción con display:none.
  window.webgazer.showFaceOverlay(false);window.webgazer.showFaceFeedbackBox(false);
  document.querySelector('#webgazerVideoContainer')?.classList.add('tracking-video');
- view('<h1>Calibración</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto y haz dos clics separados, esperando a que el punto vuelva a ponerse rojo. No hagas doble clic. Cuando cambie de posición, mueve únicamente los ojos para mirar el siguiente punto y repite.</p><p id="calibration-status" role="status"></p>');
- const points=shuffle([[15,20],[50,20],[85,20],[15,50],[50,50],[85,50],[15,80],[50,80],[85,80]],rng);let i=0,count=0;
- const b=document.createElement('button');b.className='dot';b.setAttribute('aria-label','Punto de calibración');document.body.append(b);
- const status=document.querySelector('#calibration-status'),video=document.querySelector('#webgazerVideoFeed');let previousEyes=null;
- const arm=delay=>{b.disabled=true;after(()=>{let positions=window.webgazer.getTracker().getPositions(),newFrames=0;const videoTime=video?.currentTime;
-  const fresh=()=>{if(b.removed||stopped)return;const current=window.webgazer.getTracker().getPositions();if(current&&current!==positions){positions=current;newFrames++;}if(faceReady()&&newFrames>=2&&(!video||video.currentTime>videoTime)&&(!previousEyes||lastEyeFeatures&&lastEyeFeatures!==previousEyes)){b.disabled=false;status.textContent=count?'Haz el segundo clic sin apartar la mirada.':'Mira el centro del punto y haz el primer clic.';}else{status.textContent='Mantén la mirada en el punto. Esperando una imagen nueva de la cámara.';after(fresh,50);}};fresh();
- },delay);};
- const place=()=>{b.style.left=points[i][0]+'vw';b.style.top=points[i][1]+'vh';arm(1000);};place();
- const timeout=after(()=>{b.removed=true;b.remove();session.gaze_status='failed';cameraProblem('La calibración no ha recibido suficientes imágenes nuevas a tiempo. Comprueba que la vista previa se mueve al ajustar tu posición.');},60000);
- b.onclick=()=>{if(b.disabled||stopped)return;if(!faceReady()){status.textContent='Se ha perdido el seguimiento del rostro. Mira hacia la pantalla.';arm(300);return;}const model=window.webgazer.getRegression()[0],before=model.getData().length,r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');if(model.getData().length===before){status.textContent='No se ha registrado una imagen de los ojos. Mantén la mirada en el punto.';arm(300);return;}previousEyes=model.getData().at(-1).eyes;status.textContent='';if(++count===2){count=0;if(++i===points.length){clearTimeout(timeout);b.removed=true;b.remove();validate();}else place();}else arm(300);};
-}
-function validate(){
- view('<h1>Calibración completada</h1><p>Ahora verás cinco puntos que cambian de posición solos. Mantén la cabeza fija, sin moverla ni girarla, y mira el centro de cada punto hasta que cambie de posición. Sigue cada punto moviendo únicamente los ojos, sin hacer clic.</p><button id="validate">Comenzar comprobación</button>');
- document.querySelector('#validate').onclick=validateGaze;
+ view('<h1>Sigue los puntos con la mirada</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto hasta que cambie de posición. Mueve únicamente los ojos. Los puntos avanzan solos; no hagas clic.</p><p id="calibration-status" role="status"></p>');
+ const points=shuffle([[15,20],[50,20],[85,20],[15,50],[50,50],[85,50],[15,80],[50,80],[85,80]],rng);let i=0;
+ const b=document.createElement('span');b.className='dot';document.body.append(b);
+ const status=document.querySelector('#calibration-status'),video=document.querySelector('#webgazerVideoFeed'),model=window.webgazer.getRegression()[0];
+ const fail=()=>{b.remove();exit('camera');};
+ function next(){
+  if(stopped)return;if(i===points.length){b.remove();validateGaze();return;}
+  b.style.left=points[i][0]+'vw';b.style.top=points[i][1]+'vh';status.textContent=`Punto ${++i} de ${points.length}. Mantén la mirada en su centro.`;
+  let positions=null,newFrames=0,count=0,firstSample=null,lastSample=-Infinity,videoTime=video?.currentTime,finished=false;
+  const limit=after(()=>{finished=true;fail();},5000);
+  // Descartar también la inferencia que pudiera seguir en curso al terminar la espera.
+  after(()=>{positions=window.webgazer.getTracker().getPositions();videoTime=video?.currentTime;
+   const sample=()=>{if(stopped||finished)return;const current=window.webgazer.getTracker().getPositions(),now=performance.now();
+    if(current&&current!==positions){positions=current;newFrames++;
+     if(newFrames>=2&&faceReady()&&now-lastSample>=100&&(!video||video.currentTime>videoTime)){
+      const before=model.getData().length,r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');
+      if(model.getData().length>before){count++;firstSample??=now;lastSample=now;videoTime=video?.currentTime;}
+     }
+    }
+    if(count>=5&&now-firstSample>=1500){finished=true;clearTimeout(limit);next();}else after(sample,50);
+   };sample();
+  },1000);
+ }next();
 }
 function validateGaze(){
- view('<h1>Comprobación de la mirada</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto hasta que cambie de posición y sigue el siguiente moviendo únicamente los ojos, sin hacer clic. Esta fase mide la precisión; no entrena el sistema.</p>');
- const points=[[25,30],[75,30],[50,50],[25,70],[75,70]];let i=0;const centers=[],completeWindows=[];
+ view('<h1>Últimos cinco puntos</h1><p>Continúa con la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto hasta que cambie de posición. Mueve únicamente los ojos, sin hacer clic.</p>');
+ const points=[[25,30],[75,30],[50,50],[25,70],[75,70]];let i=0;const completeWindows=[];
  const b=document.createElement('span');b.className='dot';document.body.append(b);
- function next(){if(i===points.length){b.remove();gazeHandler=null;const valid=session.validation.length===5&&completeWindows.every(Boolean)&&session.validation.every(v=>v.n>=5&&v.in_roi>=.5);session.gaze_status=valid?'valid':'invalid';if(valid)instructions();else{
-  const enough=completeWindows.every(Boolean)&&session.validation.every(v=>v.n>=5),staticGaze=centers.length===5&&centers.every(p=>Math.hypot(p.x-centers[0].x,p.y-centers[0].y)<30);
-  cameraProblem(!enough?'No llegan suficientes muestras nuevas de mirada. La vista previa puede mostrar el rostro aunque el seguimiento no se actualice.':staticGaze?'La estimación permanece en la misma zona aunque los puntos cambien. El seguimiento no está distinguiendo la dirección de la mirada. Prueba a abrir el estudio en Chrome o Edge.':'Se recibe la mirada, pero su posición no coincide con los puntos con suficiente precisión. Mantén la cabeza fija y vuelve a calibrar.');
- }return;}
-  const [px,py]=points[i++],x=innerWidth*px/100,y=innerHeight*py/100;b.style.left=px+'vw';b.style.top=py+'vh';const shown=performance.now();let errors=[],samples=[],warmFrames=0,measureStart=null,previousFeatures=null,done=false,measureTimer;
+ function next(){if(i===points.length){b.remove();gazeHandler=null;
+  const enough=session.validation.length===5&&completeWindows.every(Boolean)&&session.validation.every(v=>v.n>=5);
+  if(!enough){exit('camera');return;}
+  session.gaze_status=session.validation.every(v=>v.in_roi>=.5)?'valid':'invalid';instructions();return;
+ }
+  const [px,py]=points[i++],x=innerWidth*px/100,y=innerHeight*py/100;b.style.left=px+'vw';b.style.top=py+'vh';const shown=performance.now();let errors=[],warmFrames=0,measureStart=null,previousFeatures=null,done=false,measureTimer;
   const finishPoint=force=>{if(done||(!force&&(measureStart===null||performance.now()-measureStart<1500||errors.length<5)))return;done=true;clearTimeout(limit);clearTimeout(measureTimer);gazeHandler=null;const duration=measureStart===null?0:performance.now()-measureStart;completeWindows.push(duration>=1500);
    session.validation.push({x,y,n:errors.length,in_roi:errors.length?errors.filter(e=>e<=150).length/errors.length:0,mean_error_px:errors.length?Math.round(errors.reduce((a,b)=>a+b,0)/errors.length):null,samples_per_sec:duration?errors.length*1000/duration:0});
-   if(samples.length)centers.push({x:samples.reduce((n,p)=>n+p.x,0)/samples.length,y:samples.reduce((n,p)=>n+p.y,0)/samples.length});next();
+   next();
   };
   const limit=after(()=>finishPoint(true),7000);
-  gazeHandler=(d,t)=>{if(d.eyeFeatures&&d.eyeFeatures===previousFeatures)return;previousFeatures=d.eyeFeatures;const captured=Number.isFinite(d.t)?d.t:t;if(captured<shown)return;
+  gazeHandler=(d,t)=>{if(Math.abs(d.x)>100000||Math.abs(d.y)>100000)return;if(d.eyeFeatures&&d.eyeFeatures===previousFeatures)return;previousFeatures=d.eyeFeatures;const captured=Number.isFinite(d.t)?d.t:t;if(captured<shown)return;
    if(measureStart===null){warmFrames++;if(captured-shown>=1200&&warmFrames>=6){measureStart=t;measureTimer=after(()=>finishPoint(false),1500);}return;}
-   errors.push(Math.hypot(d.x-x,d.y-y));samples.push({x:d.x,y:d.y});finishPoint(false);
+   errors.push(Math.hypot(d.x-x,d.y-y));finishPoint(false);
   };
  }next();
 }
 function instructions(){
  if(stopped)return;
- if(!session.camera_consent||!camera||session.gaze_status!=='valid'){cameraProblem('Falta una comprobación válida de la mirada.');return;}
+ if(!session.camera_consent||!camera||!['valid','invalid'].includes(session.gaze_status)){exit('camera');return;}
  if(C.totalBudgetMs-elapsed()<C.taskBudgetMs+10000){exit('timeout');return;}
- view('<h1>Cómo participar</h1><p>Lee cada texto para comprenderlo. Pulsa «He terminado» cuando acabes. Si aparece un número, indica si es par o impar; el texto volverá tras cuatro segundos. Después responde una pregunta sin consultar el texto.</p><p>Las pantallas avanzan automáticamente si se agota su tiempo. Mantén esta pestaña y el tamaño de la ventana durante la tarea.</p><button id="begin">Empezar las cuatro lecturas</button>');
+ view(`${session.gaze_status==='invalid'?'<p class="notice">Se ha recibido la mirada, pero con precisión baja. Puedes continuar; los datos conservarán esta indicación para el análisis.</p>':''}<h1>Cómo participar</h1><p>Lee cada texto para comprenderlo. Pulsa «He terminado» cuando acabes. Si aparece un número, indica si es par o impar; el texto volverá tras cuatro segundos. Después responde una pregunta sin consultar el texto.</p><p>Las pantallas avanzan automáticamente si se agota su tiempo. Mantén la cabeza fija y mueve únicamente los ojos. Conserva esta pestaña y el tamaño de la ventana durante la tarea.</p><button id="begin">Empezar las cuatro lecturas</button>`);
  document.querySelector('#begin').onclick=run;
 }
 class ReadingTrial {
@@ -179,7 +188,7 @@ class ReadingTrial {
 }
 function run(){
  if(stopped)return;
- if(!session.camera_consent||!camera||session.gaze_status!=='valid'){cameraProblem('Falta una comprobación válida de la mirada.');return;}
+ if(!session.camera_consent||!camera||!['valid','invalid'].includes(session.gaze_status)){exit('camera');return;}
  if(C.totalBudgetMs-elapsed()<C.taskBudgetMs+10000){exit('timeout');return;}
  session.task_start_ms=elapsed();session.quality={hidden:0,resize:0};app.innerHTML='';
  jsPsych=initJsPsych({display_element:app,on_finish:finish,on_close:stopCamera});
@@ -187,7 +196,7 @@ function run(){
 }
 function finish(){
  if(stopped)return;
- if(!session.camera_consent||session.gaze_status!=='valid'||session.trials.length!==4||session.trials.some(t=>!(t.gaze_n>0))){exit('camera');return;}
+ if(!session.camera_consent||!['valid','invalid'].includes(session.gaze_status)||session.trials.length!==4||session.trials.some(t=>!(t.gaze_n>0))){exit('camera');return;}
  stopCamera();clearTimers();session.elapsed_ms=elapsed();
  view(`<h1>Has terminado las lecturas</h1><p>Estudiamos si la puntuación que divide un texto en unidades más cortas ayuda a leer cuando aparecen interrupciones.</p><p>Para solicitar la retirada de tus datos, contacta con el investigador: <a href="mailto:${esc(C.email)}">${esc(C.email)}</a>.</p><p>${C.mode==='demo'?'Esta demostración no enviará datos.':'Tus respuestas se envían automáticamente. Mantén esta pestaña abierta hasta recibir la confirmación.'}</p><div class="buttons"><button id="send" ${C.mode==='live'?'hidden':''}>${C.mode==='demo'?'Finalizar demostración':'Enviar mis respuestas'}</button><button class="secondary" id="discard">Descartar</button></div><p id="delivery" role="status"></p>`);
  document.querySelector('#discard').onclick=()=>exit();document.querySelector('#send').onclick=send;
