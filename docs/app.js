@@ -35,7 +35,7 @@ function landing(){
  <p>Investigador: ${esc(C.researcher)}, ${esc(C.institution)}. Contacto: <a href="mailto:${esc(C.email)}">${esc(C.email)}</a>.</p>
  <p>Participar es voluntario y sin remuneración. Puedes omitir los datos opcionales y salir sin penalización. Las tareas pueden causar cansancio leve.</p>
  <p>No pedimos tu nombre ni correo. Guardamos respuestas, tiempos, datos demográficos y medidas técnicas con un código aleatorio de sesión. La cámara es opcional: estima la mirada en tu ordenador, sin grabar ni enviar imágenes, vídeo o audio. Solo se envían medidas resumidas.</p>
- <p>En el estudio activo, confirmarás el envío a una hoja privada de Google Sheets. Conservaremos los datos ${C.retentionMonths} meses y publicaremos resultados agregados. GitHub, Google y los proveedores de bibliotecas reciben datos técnicos de conexión.</p>
+ <p>En el estudio activo, tus respuestas se enviarán automáticamente a una hoja privada de Google Sheets al terminar las cuatro lecturas y sus preguntas. Conservaremos los datos ${C.retentionMonths} meses y publicaremos resultados agregados. GitHub, Google y los proveedores de bibliotecas reciben datos técnicos de conexión.</p>
  <p>Puedes retirarte del estudio en cualquier momento. Si sales antes del envío, se descartan tus respuestas. Puedes contactar conmigo para conocer los resultados del estudio. Consentimiento ${esc(C.consent)}.</p></details>
  <form id="consent"><label><input type="checkbox" required name="adult">Tengo 18 años o más y puedo leer español con fluidez.</label><label><input type="checkbox" required name="agree">He leído la información y acepto participar y el tratamiento descrito.</label><label><input type="checkbox" name="webcam">Acepto, de forma opcional, usar mi cámara para estimar la mirada.</label><div class="buttons"><button type="submit">Continuar</button><button type="button" class="secondary" id="decline">No participar</button></div></form>`);
  document.querySelector('#decline').onclick=()=>exit();
@@ -52,7 +52,7 @@ function demographics(){
  ${select('gender','Género',[['woman','Mujer'],['man','Hombre'],['other','Otra identidad']])}</div><button>Continuar</button></form>`);
  document.querySelector('#demo').onsubmit=e=>{e.preventDefault();Object.assign(session,Object.fromEntries(new FormData(e.target)));session.camera_consent?cameraIntro():instructions();};
 }
-function cameraIntro(){view('<h1>Preparar la cámara</h1><p>Busca buena iluminación y mantén la cabeza estable. La cámara es opcional. Después mirarás y pulsarás unos puntos; al validar solo tendrás que mirarlos.</p><div class="buttons"><button id="camera">Activar cámara</button><button class="secondary" id="skip">Continuar sin cámara</button></div>');document.querySelector('#skip').onclick=instructions;document.querySelector('#camera').onclick=initCamera;}
+function cameraIntro(){view('<h1>Preparar la cámara</h1><p>Busca buena iluminación. Mantén la cabeza fija, sin moverla ni girarla, durante la calibración y la comprobación. Dirige la mirada al centro de cada punto, tanto cuando hagas clic como cuando solo tengas que mirarlo. Para seguir los puntos, mueve únicamente los ojos. La cámara es opcional.</p><div class="buttons"><button id="camera">Activar cámara</button><button class="secondary" id="skip">Continuar sin cámara</button></div>');document.querySelector('#skip').onclick=instructions;document.querySelector('#camera').onclick=initCamera;}
 async function initCamera(){
  view('<h1>Conectando la cámara…</h1><p>Acepta el permiso del navegador si deseas usarla. No se solicitará micrófono.</p><button class="secondary" id="skip">Continuar sin cámara</button>');
  let abandoned=false;const fail=(error)=>{if(abandoned||stopped)return;abandoned=true;clearTimeout(timeout);stopCamera();session.gaze_status='failed';
@@ -74,7 +74,7 @@ async function initCamera(){
  }catch(error){fail(error);}
 }
 function calibrate(){
- window.webgazer.showVideoPreview(false);view('<h1>Calibración</h1><p>Mira cada punto y pulsa dos veces. Mantén la cabeza estable.</p>');
+ window.webgazer.showVideoPreview(false);view('<h1>Calibración</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto y haz dos clics sobre él sin apartar la mirada. Cuando cambie de posición, mueve únicamente los ojos para mirar el siguiente punto y repite los dos clics.</p>');
  const points=shuffle([[15,20],[50,20],[85,20],[15,50],[50,50],[85,50],[15,80],[50,80],[85,80]],rng);let i=0,count=0;
  const b=document.createElement('button');b.className='dot';b.setAttribute('aria-label','Punto de calibración');document.body.append(b);
  const place=()=>{b.style.left=points[i][0]+'vw';b.style.top=points[i][1]+'vh';};place();
@@ -82,11 +82,11 @@ function calibrate(){
  b.onclick=()=>{const r=b.getBoundingClientRect();window.webgazer.recordScreenPosition(r.x+r.width/2,r.y+r.height/2,'click');if(++count===2){count=0;if(++i===points.length){clearTimeout(timeout);b.remove();validate();}else place();}};
 }
 function validate(){
- view('<h1>Calibración completada</h1><p>Ahora verás cinco puntos que cambian de posición solos. Mira cada punto sin hacer clic.</p><button id="validate">Comenzar comprobación</button>');
+ view('<h1>Calibración completada</h1><p>Ahora verás cinco puntos que cambian de posición solos. Mantén la cabeza fija, sin moverla ni girarla, y mira el centro de cada punto hasta que cambie de posición. Sigue cada punto moviendo únicamente los ojos, sin hacer clic.</p><button id="validate">Comenzar comprobación</button>');
  document.querySelector('#validate').onclick=validateGaze;
 }
 function validateGaze(){
- view('<h1>Comprobación de la mirada</h1><p>Mira los puntos sin pulsar. Esta fase mide la precisión; no entrena el sistema.</p>');
+ view('<h1>Comprobación de la mirada</h1><p>Mantén la cabeza fija, sin moverla ni girarla. Mira el centro de cada punto hasta que cambie de posición y sigue el siguiente moviendo únicamente los ojos, sin hacer clic. Esta fase mide la precisión; no entrena el sistema.</p>');
  const points=[[25,30],[75,30],[50,50],[25,70],[75,70]];let i=0;
  const b=document.createElement('span');b.className='dot';document.body.append(b);
  function next(){if(i===points.length){b.remove();gazeHandler=null;const valid=session.validation.every(v=>v.n>=5&&v.in_roi>=.5);session.gaze_status=valid?'valid':'invalid';instructions();return;}
@@ -142,8 +142,9 @@ function run(){
 }
 function finish(){
  if(stopped)return;stopCamera();clearTimers();session.elapsed_ms=elapsed();
- view(`<h1>Has terminado las lecturas</h1><p>Estudiamos si la puntuación que divide un texto en unidades más cortas ayuda a leer cuando aparecen interrupciones.</p><p>Tu código: <strong>${session.session_id}</strong>. Consérvalo si deseas solicitar la retirada de los datos durante los próximos ${C.retentionMonths} meses.</p><p>${C.mode==='demo'?'Esta demostración no enviará datos.':'Puedes confirmar el envío de tus respuestas o descartarlas.'}</p><div class="buttons"><button id="send">${C.mode==='demo'?'Finalizar demostración':'Enviar mis respuestas'}</button><button class="secondary" id="discard">Descartar</button></div><p id="delivery" role="status"></p>`);
+ view(`<h1>Has terminado las lecturas</h1><p>Estudiamos si la puntuación que divide un texto en unidades más cortas ayuda a leer cuando aparecen interrupciones.</p><p>Tu código: <strong>${session.session_id}</strong>. Consérvalo si deseas solicitar la retirada de los datos durante los próximos ${C.retentionMonths} meses.</p><p>${C.mode==='demo'?'Esta demostración no enviará datos.':'Tus respuestas se envían automáticamente. Mantén esta pestaña abierta hasta recibir la confirmación.'}</p><div class="buttons"><button id="send" ${C.mode==='live'?'hidden':''}>${C.mode==='demo'?'Finalizar demostración':'Enviar mis respuestas'}</button><button class="secondary" id="discard">Descartar</button></div><p id="delivery" role="status"></p>`);
  document.querySelector('#discard').onclick=()=>exit();document.querySelector('#send').onclick=send;
+ if(C.mode==='live')send();
 }
 let bridge=null,bridgeOrigin=null,bridgeWindow=null;const bridgeChannel=crypto.randomUUID();
 async function deliver(payload){
@@ -165,11 +166,11 @@ async function deliver(payload){
 async function send(){
  const btn=document.querySelector('#send'),status=document.querySelector('#delivery');btn.disabled=true;
  if(C.mode==='demo'){clearTimeout(watchdog);submitted=true;session.trials=[];exitButton.hidden=true;view('<h1>Demostración finalizada</h1><p>No se ha enviado ningún dato. Gracias por probar el estudio.</p>');return;}
- // Esta acción constituye la confirmación de envío; ya no se ofrece una retirada
+ // El envío comienza automáticamente al terminar; ya no se ofrece una retirada
  // local que pudiera prometer borrar un envío en curso. Retirada posterior por código.
  clearTimeout(watchdog);exitButton.hidden=true;document.querySelector('#discard').hidden=true;
  status.textContent='Enviando y esperando confirmación de Google Sheets…';
  try{await deliver({...session,mode:'live'});submitted=true;status.textContent='Google Sheets ha confirmado la recepción. Ya puedes cerrar la pestaña.';btn.hidden=true;}
- catch(e){status.textContent='No podemos confirmar la recepción. Puedes reintentar sin duplicar la sesión. Para retirar un envío que haya llegado, escribe al investigador con tu código.';btn.disabled=false;btn.textContent='Reintentar envío';}
+ catch(e){status.textContent='No podemos confirmar la recepción. Puedes reintentar sin duplicar la sesión. Para retirar un envío que haya llegado, escribe al investigador con tu código.';btn.hidden=false;btn.disabled=false;btn.textContent='Reintentar envío';}
 }
 landing();
